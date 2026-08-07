@@ -2,7 +2,7 @@ const path = require('path');
 const fs = require('fs');
 const { DatabaseSync } = require('node:sqlite');
 
-const DATA_DIR = process.env.VERCEL_ENV
+const DATA_DIR = (process.env.VERCEL || process.env.VERCEL_ENV)
   ? '/tmp/siem-data'
   : path.join(__dirname, '..', 'data');
 

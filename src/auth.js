@@ -1,4 +1,4 @@
-const API_KEY = process.env.API_KEY || 'siem-' + Date.now().toString(36);
+const API_KEY = process.env.API_KEY || 'siem-default-key-12345';
 
 if (process.env.NODE_ENV !== 'production') {
   console.log(`\n  [auth] Default API key: ${API_KEY}\n  Set the API_KEY environment variable to override.\n`);

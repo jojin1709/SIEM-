@@ -5,15 +5,7 @@
       "src": "server.js",
       "use": "@vercel/node",
       "config": {
-        "includeFiles": [
-          "src/**",
-          "public/**",
-          "sample-logs/auth-syslog.log",
-          "sample-logs/access-nginx.log",
-          "sample-logs/eve.json",
-          "sample-logs/winevents.json",
-          "data/threatintel/**"
-        ]
+        "includeFiles": ["src/**", "public/**"]
       }
     }
   ],

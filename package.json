@@ -23,9 +23,6 @@
     "ws": "^8.18.0",
     "multer": "^2.2.0"
   },
-  "engines": {
-    "node": ">=18.x"
-  },
   "vercel": {
     "version": 2,
     "builds": [
