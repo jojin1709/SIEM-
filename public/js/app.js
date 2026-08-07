@@ -224,6 +224,10 @@ function renderTopHostsTable(rows) {
 }
 
 // ---------- Splunk-Style Search & Logs ----------
+let activeSearchSubtab = 'events';
+let currentSearchResults = [];
+let chartSearchVis = null;
+
 function initSearchEvents() {
   document.getElementById('doSearch')?.addEventListener('click', () => {
     searchPage = 1;
@@ -237,14 +241,15 @@ function initSearchEvents() {
     }
   });
 
-  document.querySelectorAll('.preset-btn[data-range]').forEach(btn => {
-    btn.addEventListener('click', () => {
-      document.querySelectorAll('.preset-btn[data-range]').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      timeRangePreset = btn.dataset.range;
-      searchPage = 1;
-      loadSearch();
-    });
+  document.getElementById('timeRangeSelect')?.addEventListener('change', (e) => {
+    timeRangePreset = e.target.value;
+    searchPage = 1;
+    loadSearch();
+  });
+
+  document.getElementById('pageSizeSelect')?.addEventListener('change', () => {
+    searchPage = 1;
+    loadSearch();
   });
 
   document.getElementById('prevPage')?.addEventListener('click', () => {
@@ -257,16 +262,32 @@ function initSearchEvents() {
   document.getElementById('exportCsvBtn')?.addEventListener('click', () => exportSearch('csv'));
   document.getElementById('exportJsonBtn')?.addEventListener('click', () => exportSearch('json'));
 
-  // Field Drawer Click Helper
+  // Toggle Hide/Show Fields Drawer
+  document.getElementById('toggleFieldsBtn')?.addEventListener('click', () => {
+    const sidebar = document.querySelector('.fields-sidebar');
+    if (sidebar) sidebar.classList.toggle('hidden');
+  });
+
+  // Splunk Sub-tabs Switcher (Events, Patterns, Statistics, Visualization)
+  document.querySelectorAll('.splunk-subtab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('.splunk-subtab').forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      activeSearchSubtab = tab.dataset.subtab;
+      renderSearchSubtabContent();
+    });
+  });
+
+  // Field Drawer Click Helper (Open Field Inspector Modal)
   document.querySelectorAll('.field-item').forEach(item => {
     item.addEventListener('click', () => {
       const fieldName = item.dataset.field;
-      const input = document.getElementById('searchQuery');
-      if (input) {
-        input.value = input.value.trim() ? `${input.value} ${fieldName}:` : `${fieldName}:`;
-        input.focus();
-      }
+      openFieldInspectorModal(fieldName);
     });
+  });
+
+  document.getElementById('closeFieldModal')?.addEventListener('click', () => {
+    document.getElementById('fieldModal')?.classList.add('hidden');
   });
 }
 
@@ -275,59 +296,93 @@ function getTimeRangeParams() {
   if (timeRangePreset === '15m') return { from: now - 15 * 60 * 1000, to: now };
   if (timeRangePreset === '1h') return { from: now - 60 * 60 * 1000, to: now };
   if (timeRangePreset === '24h') return { from: now - 24 * 60 * 60 * 1000, to: now };
+  if (timeRangePreset === '7d') return { from: now - 7 * 24 * 60 * 60 * 1000, to: now };
   return {};
 }
 
 async function loadSearch() {
   const query = document.getElementById('searchQuery')?.value.trim() || '';
   const resultsBox = document.getElementById('searchResults');
-  const countBox = document.getElementById('searchResultsCount');
+  const summaryBox = document.getElementById('searchResultsSummary');
+  const subtabEventCount = document.getElementById('subtabEventCount');
+  const pageSize = parseInt(document.getElementById('pageSizeSelect')?.value || '20', 10);
 
   if (resultsBox) resultsBox.innerHTML = '<div style="padding: 30px; text-align: center; color: var(--text-faint);">Searching logs...</div>';
 
   try {
     const { from, to } = getTimeRangeParams();
-    let url = `/api/search?q=${encodeURIComponent(query)}&page=${searchPage}&pageSize=30`;
+    let url = `/api/search?q=${encodeURIComponent(query)}&page=${searchPage}&pageSize=${pageSize}`;
     if (from) url += `&from=${from}`;
     if (to) url += `&to=${to}`;
 
     const resp = await apiFetch(url).then(r => r.json());
-    const results = resp.results || [];
+    currentSearchResults = resp.results || [];
     const total = resp.total || 0;
 
-    if (countBox) countBox.textContent = `${total.toLocaleString()} logs matched (Page ${searchPage} of ${resp.totalPages || 1})`;
+    if (summaryBox) summaryBox.textContent = `${total.toLocaleString()} events matched (${new Date(from || 0).toLocaleTimeString()} to ${new Date().toLocaleTimeString()})`;
+    if (subtabEventCount) subtabEventCount.textContent = total.toLocaleString();
 
-    updateFieldDrawerCounts(results);
+    const indicator = document.getElementById('pageIndicator');
+    if (indicator) indicator.textContent = `Page ${searchPage} of ${resp.totalPages || 1}`;
 
-    if (!results.length) {
-      if (resultsBox) resultsBox.innerHTML = '<div style="padding: 40px; text-align: center; color: var(--text-faint);">No matching log entries found</div>';
-      return;
-    }
-
-    renderSearchResults(results);
+    updateFieldDrawerCounts(currentSearchResults);
+    renderSearchSubtabContent();
   } catch (err) {
     if (resultsBox) resultsBox.innerHTML = `<div style="padding: 30px; text-align: center; color: var(--critical-red);">Search failed: ${err.message}</div>`;
   }
 }
 
 function updateFieldDrawerCounts(results) {
-  const fieldCounts = { source_type: {}, severity: {}, src_ip: {}, user: {}, host: {} };
+  const fields = ['host', 'source_type', 'severity', 'src_ip', 'dest_ip', 'user', 'event_id'];
+  const fieldCounts = {};
+  fields.forEach(f => fieldCounts[f] = new Set());
 
   results.forEach(r => {
-    ['source_type', 'severity', 'src_ip', 'user', 'host'].forEach(f => {
-      if (r[f]) fieldCounts[f][r[f]] = (fieldCounts[f][r[f]] || 0) + 1;
+    fields.forEach(f => {
+      if (r[f] !== undefined && r[f] !== null && r[f] !== '') fieldCounts[f].add(String(r[f]));
     });
   });
 
-  Object.keys(fieldCounts).forEach(f => {
+  fields.forEach(f => {
     const el = document.getElementById(`fc-${f}`);
-    if (el) el.textContent = Object.keys(fieldCounts[f]).length;
+    if (el) el.textContent = fieldCounts[f].size;
   });
+}
+
+function renderSearchSubtabContent() {
+  const eventsView = document.getElementById('searchResults');
+  const patternsView = document.getElementById('searchPatternsView');
+  const statsView = document.getElementById('searchStatsView');
+  const visView = document.getElementById('searchVisView');
+
+  if (eventsView) eventsView.classList.add('hidden');
+  if (patternsView) patternsView.classList.add('hidden');
+  if (statsView) statsView.classList.add('hidden');
+  if (visView) visView.classList.add('hidden');
+
+  if (activeSearchSubtab === 'events') {
+    if (eventsView) eventsView.classList.remove('hidden');
+    renderSearchResults(currentSearchResults);
+  } else if (activeSearchSubtab === 'patterns') {
+    if (patternsView) patternsView.classList.remove('hidden');
+    renderPatternsView(currentSearchResults);
+  } else if (activeSearchSubtab === 'statistics') {
+    if (statsView) statsView.classList.remove('hidden');
+    renderStatisticsView(currentSearchResults);
+  } else if (activeSearchSubtab === 'visualization') {
+    if (visView) visView.classList.remove('hidden');
+    renderVisualizationView(currentSearchResults);
+  }
 }
 
 function renderSearchResults(results) {
   const resultsBox = document.getElementById('searchResults');
   if (!resultsBox) return;
+
+  if (!results.length) {
+    resultsBox.innerHTML = '<div style="padding: 40px; text-align: center; color: var(--text-faint);">No matching log entries found</div>';
+    return;
+  }
 
   resultsBox.innerHTML = results.map(r => {
     const timeStr = new Date(r.ts).toLocaleString();
@@ -335,14 +390,30 @@ function renderSearchResults(results) {
     const jsonParsed = JSON.stringify(r.parsed || {}, null, 2);
     const tiHitBadge = r.threat_intel_hit ? `<span class="log-badge critical">⚠️ THREAT INTEL MATCH (${r.threat_intel_hit.value})</span>` : '';
 
+    // Generate Splunk Inline Key-Value Tokens
+    const tokens = [];
+    if (r.host) tokens.push(`<span class="token-item"><span class="token-key">host</span> = <span class="token-val">${escapeHtml(r.host)}</span></span>`);
+    if (r.source_type) tokens.push(`<span class="token-item"><span class="token-key">source_type</span> = <span class="token-val">${escapeHtml(r.source_type)}</span></span>`);
+    if (r.src_ip) tokens.push(`<span class="token-item"><span class="token-key">src_ip</span> = <span class="token-val">${escapeHtml(r.src_ip)}</span></span>`);
+    if (r.dest_ip) tokens.push(`<span class="token-item"><span class="token-key">dest_ip</span> = <span class="token-val">${escapeHtml(r.dest_ip)}</span></span>`);
+    if (r.user) tokens.push(`<span class="token-item"><span class="token-key">user</span> = <span class="token-val">${escapeHtml(r.user)}</span></span>`);
+    if (r.severity) tokens.push(`<span class="token-item"><span class="token-key">severity</span> = <span class="token-val">${escapeHtml(r.severity)}</span></span>`);
+
     return `
       <div class="log-row-container" data-id="${r.id}">
-        <div class="log-row-header">
-          <span class="log-time">${timeStr}</span>
-          <span class="log-badge ${severity}">${severity}</span>
-          <span class="log-badge info">${r.source_type}</span>
-          ${tiHitBadge}
-          <span class="log-message">${escapeHtml(r.message || r.raw)}</span>
+        <div class="log-row-header" style="align-items: flex-start;">
+          <div style="font-family: var(--font-mono); font-size: 11px; color: var(--cyber-cyan); font-weight: 700; cursor: pointer; width: 14px;">›</div>
+          <div class="log-time" style="width: 170px;">${timeStr}</div>
+          <div style="flex: 1;">
+            <div style="color: var(--text-main); font-family: var(--font-mono); font-size: 12px; font-weight: 600; margin-bottom: 4px;">
+              <span class="log-badge ${severity}">${severity}</span>
+              ${tiHitBadge}
+              ${escapeHtml(r.message || r.raw)}
+            </div>
+            <div class="event-tokens">
+              ${tokens.join('')}
+            </div>
+          </div>
         </div>
         <div class="log-detail-box hidden" id="log-detail-${r.id}">
           <div style="margin-bottom: 8px; font-weight: 700; color: var(--cyber-cyan);">Extracted & Parsed Log Fields</div>
@@ -365,6 +436,145 @@ function renderSearchResults(results) {
     });
   });
 }
+
+function renderPatternsView(results) {
+  const container = document.getElementById('patternsContent');
+  if (!container) return;
+
+  const patterns = {};
+  results.forEach(r => {
+    const sig = (r.message || r.raw || '').replace(/\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b/g, '<IP>')
+                                       .replace(/\b\d+\b/g, '<NUM>');
+    patterns[sig] = (patterns[sig] || 0) + 1;
+  });
+
+  const sorted = Object.entries(patterns).sort((a, b) => b[1] - a[1]);
+
+  container.innerHTML = sorted.map(([sig, count]) => `
+    <div style="background: var(--bg-dark); padding: 12px 16px; border-radius: var(--radius-sm); border: 1px solid var(--border); margin-bottom: 8px; display: flex; justify-content: space-between; gap: 14px;">
+      <div style="font-family: var(--font-mono); font-size: 12px; color: var(--text-main);">${escapeHtml(sig)}</div>
+      <div style="font-family: var(--font-mono); font-weight: 700; color: var(--splunk-green); white-space: nowrap;">${count} events (${Math.round((count/results.length)*100)}%)</div>
+    </div>
+  `).join('') || 'No patterns extracted';
+}
+
+function renderStatisticsView(results) {
+  const tbody = document.querySelector('#statsSummaryTable tbody');
+  if (!tbody) return;
+
+  const fields = ['source_type', 'severity', 'src_ip', 'dest_ip', 'user', 'host'];
+  
+  tbody.innerHTML = fields.map(f => {
+    const valCounts = {};
+    results.forEach(r => {
+      if (r[f]) valCounts[r[f]] = (valCounts[r[f]] || 0) + 1;
+    });
+    const sorted = Object.entries(valCounts).sort((a, b) => b[1] - a[1]);
+    const topVal = sorted.length ? `${sorted[0][0]} (${sorted[0][1]})` : 'N/A';
+    
+    return `
+      <tr>
+        <td style="font-family: var(--font-mono); font-weight: 700; color: var(--cyber-cyan);">${f}</td>
+        <td style="font-family: var(--font-mono);">${results.filter(r => r[f]).length}</td>
+        <td style="font-family: var(--font-mono);">${Object.keys(valCounts).length}</td>
+        <td style="font-family: var(--font-mono); color: var(--splunk-green);">${escapeHtml(topVal)}</td>
+      </tr>
+    `;
+  }).join('');
+}
+
+function renderVisualizationView(results) {
+  const ctx = document.getElementById('chartSearchVis')?.getContext('2d');
+  if (!ctx) return;
+  if (chartSearchVis) chartSearchVis.destroy();
+
+  const sourceMap = {};
+  results.forEach(r => {
+    const src = r.source_type || 'unknown';
+    sourceMap[src] = (sourceMap[src] || 0) + 1;
+  });
+
+  chartSearchVis = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: Object.keys(sourceMap),
+      datasets: [{
+        label: 'Events Count',
+        data: Object.values(sourceMap),
+        backgroundColor: '#00f2fe',
+        borderRadius: 4
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { grid: { display: false }, ticks: { color: '#8b9bb4' } },
+        y: { grid: { color: '#1b2438' }, ticks: { color: '#8b9bb4' } }
+      }
+    }
+  });
+}
+
+function openFieldInspectorModal(fieldName) {
+  const modal = document.getElementById('fieldModal');
+  const body = document.getElementById('modalFieldBody');
+  const title = document.getElementById('modalFieldTitle');
+
+  if (modal) modal.classList.remove('hidden');
+  if (title) title.textContent = `Field Inspector: ${fieldName}`;
+
+  const valCounts = {};
+  let totalCount = 0;
+
+  currentSearchResults.forEach(r => {
+    if (r[fieldName] !== undefined && r[fieldName] !== null && r[fieldName] !== '') {
+      valCounts[r[fieldName]] = (valCounts[r[fieldName]] || 0) + 1;
+      totalCount++;
+    }
+  });
+
+  const sorted = Object.entries(valCounts).sort((a, b) => b[1] - a[1]).slice(0, 10);
+
+  if (!sorted.length) {
+    if (body) body.innerHTML = '<div style="color: var(--text-faint); text-align: center; padding: 20px;">No extracted values for this field</div>';
+    return;
+  }
+
+  if (body) {
+    body.innerHTML = `
+      <div style="margin-bottom: 14px; font-size: 12px; color: var(--text-muted);">Top values in current search dataset (${totalCount} occurrences):</div>
+      <div style="display: flex; flex-direction: column; gap: 10px;">
+        ${sorted.map(([val, cnt]) => {
+          const pct = Math.round((cnt / totalCount) * 100);
+          return `
+            <div style="background: var(--bg-dark); padding: 10px 14px; border-radius: var(--radius-sm); border: 1px solid var(--border);">
+              <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
+                <span style="font-family: var(--font-mono); font-weight: 700; color: var(--cyber-cyan);">${escapeHtml(val)}</span>
+                <span style="font-family: var(--font-mono); font-size: 11px; color: var(--text-main);">${cnt} (${pct}%)</span>
+              </div>
+              <div style="height: 4px; background: rgba(0, 242, 254, 0.15); border-radius: 2px; overflow: hidden;">
+                <div style="height: 100%; width: ${pct}%; background: var(--cyber-cyan);"></div>
+              </div>
+              <button class="btn btn-secondary" style="margin-top: 8px; padding: 2px 8px; font-size: 10.5px;" onclick="addTokenToSearch('${fieldName}', '${escapeHtml(val)}')">+ Add to search</button>
+            </div>
+          `;
+        }).join('')}
+      </div>
+    `;
+  }
+}
+
+function addTokenToSearch(field, val) {
+  const input = document.getElementById('searchQuery');
+  if (input) {
+    input.value = input.value.trim() ? `${input.value} ${field}:"${val}"` : `${field}:"${val}"`;
+    input.focus();
+  }
+  document.getElementById('fieldModal')?.classList.add('hidden');
+}
+window.addTokenToSearch = addTokenToSearch;
 
 function exportSearch(format) {
   const query = document.getElementById('searchQuery')?.value.trim() || '';

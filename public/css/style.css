@@ -660,6 +660,106 @@ html, body {
   background: var(--bg-shell);
 }
 
+/* ---------- Splunk Sub-Tabs (Events, Patterns, Statistics, Visualization) ---------- */
+.splunk-subtabs {
+  display: flex;
+  gap: 24px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 16px;
+  padding-bottom: 2px;
+}
+
+.splunk-subtab {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 600;
+  padding: 8px 4px;
+  cursor: pointer;
+  position: relative;
+  transition: color 0.15s;
+}
+
+.splunk-subtab:hover {
+  color: var(--text-main);
+}
+
+.splunk-subtab.active {
+  color: var(--cyber-cyan);
+}
+
+.splunk-subtab.active::after {
+  content: '';
+  position: absolute;
+  bottom: -1px;
+  left: 0;
+  width: 100%;
+  height: 2px;
+  background: var(--cyber-cyan);
+  box-shadow: 0 0 8px var(--cyber-cyan);
+}
+
+/* ---------- Splunk Search Match Summary Bar ---------- */
+.splunk-job-bar {
+  background: rgba(7, 9, 19, 0.6);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 8px 14px;
+  margin-bottom: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12px;
+}
+
+.splunk-job-status {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--splunk-green);
+  font-weight: 600;
+}
+
+/* ---------- Splunk Inline Event Key-Value Tokens ---------- */
+.event-tokens {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  margin-top: 6px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+.token-item {
+  color: var(--text-muted);
+  background: rgba(15, 20, 36, 0.8);
+  padding: 2px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+}
+
+.token-key {
+  color: var(--cyber-cyan);
+}
+
+.token-val {
+  color: #fff;
+  font-weight: 600;
+}
+
+.field-type-prefix {
+  font-style: italic;
+  font-weight: 700;
+  margin-right: 4px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+.field-type-prefix.string { color: var(--cyber-cyan); }
+.field-type-prefix.number { color: var(--splunk-green); }
+
 /* ---------- Responsive Adjustments ---------- */
 @media (max-width: 1024px) {
   .app-shell { grid-template-columns: 1fr; }

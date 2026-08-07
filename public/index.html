@@ -146,57 +146,136 @@
         <section class="view hidden" id="view-search">
           <div class="view-header">
             <div>
-              <h1>Splunk-Style Log Search</h1>
-              <div class="sub">Filter logs using field syntax (e.g. <code>source_type:nginx severity:high</code> or free text).</div>
+              <h1>Search & Reporting</h1>
+              <div class="sub">Splunk-compatible search pipeline. Search by free text or field tokens (e.g. <code>source_type:nginx severity:high</code>).</div>
             </div>
             <div style="display: flex; gap: 10px;">
+              <select id="splunkSaveAsSelect" class="splunk-input" style="padding: 4px 10px; font-size: 12px; width: 130px;">
+                <option value="">Save As...</option>
+                <option value="search">Saved Search</option>
+                <option value="rule">Detection Rule</option>
+              </select>
               <button class="btn btn-secondary" id="exportCsvBtn">📥 Export CSV</button>
               <button class="btn btn-secondary" id="exportJsonBtn">📥 Export JSON</button>
             </div>
           </div>
 
+          <!-- Splunk Search Bar Row -->
+          <div class="search-controls" style="margin-bottom: 12px;">
+            <div class="search-input-group">
+              <input type="text" class="splunk-input" id="searchQuery" placeholder="e.g. source_type:suricata severity:high OR 'failed password'">
+              
+              <select id="timeRangeSelect" class="splunk-input" style="width: 150px; font-weight: 600;">
+                <option value="all">All Time</option>
+                <option value="15m">Last 15 minutes</option>
+                <option value="1h">Last 1 hour</option>
+                <option value="24h" selected>Last 24 hours</option>
+                <option value="7d">Last 7 days</option>
+              </select>
+
+              <button class="btn btn-primary" id="doSearch" style="padding: 8px 24px;">🔍 Search</button>
+            </div>
+          </div>
+
+          <!-- Splunk Job Match Summary Bar -->
+          <div class="splunk-job-bar">
+            <div class="splunk-job-status" id="searchJobStatus">
+              <span>✓</span> <span id="searchResultsSummary">0 events matched</span>
+            </div>
+            <div style="display: flex; gap: 12px; align-items: center;">
+              <span style="color: var(--text-faint);">Mode:</span>
+              <select class="splunk-input" style="padding: 2px 8px; font-size: 11px;">
+                <option>Smart Mode</option>
+                <option>Fast Mode</option>
+                <option>Verbose Mode</option>
+              </select>
+              <select class="splunk-input" style="padding: 2px 8px; font-size: 11px;">
+                <option>No Event Sampling</option>
+                <option>1:10 Sampling</option>
+                <option>1:100 Sampling</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Splunk Sub-Tabs (Events, Patterns, Statistics, Visualization) -->
+          <div class="splunk-subtabs">
+            <button class="splunk-subtab active" data-subtab="events">Events (<span id="subtabEventCount">0</span>)</button>
+            <button class="splunk-subtab" data-subtab="patterns">Patterns</button>
+            <button class="splunk-subtab" data-subtab="statistics">Statistics</button>
+            <button class="splunk-subtab" data-subtab="visualization">Visualization</button>
+          </div>
+
+          <!-- Splunk Search Shell (Left Field Drawer + Right Results) -->
           <div class="splunk-search-shell">
             <!-- Left Field Picker Drawer -->
             <aside class="fields-sidebar">
+              <button class="btn btn-secondary" id="toggleFieldsBtn" style="width: 100%; margin-bottom: 12px; font-size: 11px; justify-content: center;">‹ Hide Fields</button>
+              
               <div class="fields-title">SELECTED FIELDS</div>
-              <div id="fieldsList">
-                <div class="field-item" data-field="source_type"><span>source_type</span> <span class="field-count" id="fc-source_type">0</span></div>
-                <div class="field-item" data-field="severity"><span>severity</span> <span class="field-count" id="fc-severity">0</span></div>
-                <div class="field-item" data-field="src_ip"><span>src_ip</span> <span class="field-count" id="fc-src_ip">0</span></div>
-                <div class="field-item" data-field="user"><span>user</span> <span class="field-count" id="fc-user">0</span></div>
-                <div class="field-item" data-field="host"><span>host</span> <span class="field-count" id="fc-host">0</span></div>
+              <div id="selectedFieldsList" style="margin-bottom: 16px;">
+                <div class="field-item" data-field="host"><span class="field-type-prefix string">a</span><span>host</span> <span class="field-count" id="fc-host">0</span></div>
+                <div class="field-item" data-field="source_type"><span class="field-type-prefix string">a</span><span>source_type</span> <span class="field-count" id="fc-source_type">0</span></div>
+                <div class="field-item" data-field="severity"><span class="field-type-prefix string">a</span><span>severity</span> <span class="field-count" id="fc-severity">0</span></div>
+              </div>
+
+              <div class="fields-title">INTERESTING FIELDS</div>
+              <div id="interestingFieldsList">
+                <div class="field-item" data-field="src_ip"><span class="field-type-prefix string">a</span><span>src_ip</span> <span class="field-count" id="fc-src_ip">0</span></div>
+                <div class="field-item" data-field="dest_ip"><span class="field-type-prefix string">a</span><span>dest_ip</span> <span class="field-count" id="fc-dest_ip">0</span></div>
+                <div class="field-item" data-field="user"><span class="field-type-prefix string">a</span><span>user</span> <span class="field-count" id="fc-user">0</span></div>
+                <div class="field-item" data-field="event_id"><span class="field-type-prefix number">#</span><span>event_id</span> <span class="field-count" id="fc-event_id">0</span></div>
               </div>
             </aside>
 
-            <!-- Main Search Controls & Results -->
+            <!-- Main Search Content Views -->
             <div>
-              <div class="search-controls">
-                <div class="search-input-group">
-                  <input type="text" class="splunk-input" id="searchQuery" placeholder="e.g. source_type:suricata severity:high OR 'failed password'">
-                  <button class="btn btn-primary" id="doSearch">🔍 Search</button>
+              <!-- Display Controls Bar -->
+              <div style="padding: 10px 14px; background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius-sm); margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center;">
+                <div style="display: flex; gap: 10px; align-items: center;">
+                  <button class="btn btn-secondary active" id="viewFormatListBtn" style="padding: 3px 10px; font-size: 11px;">List View</button>
+                  <button class="btn btn-secondary" id="viewFormatTableBtn" style="padding: 3px 10px; font-size: 11px;">Table View</button>
+                  <select id="pageSizeSelect" class="splunk-input" style="padding: 3px 8px; font-size: 11px; width: 110px;">
+                    <option value="10">10 Per Page</option>
+                    <option value="20" selected>20 Per Page</option>
+                    <option value="50">50 Per Page</option>
+                    <option value="100">100 Per Page</option>
+                  </select>
                 </div>
 
-                <div class="time-presets">
-                  <span style="font-size: 11px; color: var(--text-faint); align-self: center; font-weight: 700; margin-right: 6px;">TIME RANGE:</span>
-                  <button class="preset-btn active" data-range="all">All Time</button>
-                  <button class="preset-btn" data-range="15m">Last 15m</button>
-                  <button class="preset-btn" data-range="1h">Last 1h</button>
-                  <button class="preset-btn" data-range="24h">Last 24h</button>
+                <div style="display: flex; gap: 6px; align-items: center;" id="paginationControls">
+                  <button class="btn btn-secondary" id="prevPage" style="padding: 3px 10px; font-size: 11px;">‹ Prev</button>
+                  <span style="font-family: var(--font-mono); font-size: 11px; color: var(--text-muted);" id="pageIndicator">Page 1</span>
+                  <button class="btn btn-secondary" id="nextPage" style="padding: 3px 10px; font-size: 11px;">Next ›</button>
                 </div>
               </div>
 
-              <!-- Search Results Container -->
-              <div class="panel" style="padding: 0; overflow: hidden;">
-                <div style="padding: 12px 16px; background: var(--bg-shell); border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center;">
-                  <div style="font-weight: 600; font-size: 12px; color: var(--text-muted);" id="searchResultsCount">0 events matched</div>
-                  <div style="display: flex; gap: 8px;">
-                    <button class="btn btn-secondary" id="prevPage" style="padding: 4px 10px;">‹ Prev</button>
-                    <button class="btn btn-secondary" id="nextPage" style="padding: 4px 10px;">Next ›</button>
-                  </div>
+              <!-- Search Results Views -->
+              <div class="panel" style="padding: 0; overflow: hidden;" id="searchViewContainer">
+                <div id="searchResults">
+                  <div style="padding: 40px; text-align: center; color: var(--text-faint);">Loading logs...</div>
                 </div>
 
-                <div id="searchResults">
-                  <div style="padding: 30px; text-align: center; color: var(--text-faint);">Loading logs...</div>
+                <!-- Patterns View Container -->
+                <div id="searchPatternsView" class="hidden" style="padding: 20px;">
+                  <div style="font-weight: 700; color: var(--cyber-cyan); margin-bottom: 12px;">Log Signature Patterns Identified</div>
+                  <div id="patternsContent">No pattern signatures generated yet</div>
+                </div>
+
+                <!-- Statistics View Container -->
+                <div id="searchStatsView" class="hidden" style="padding: 20px;">
+                  <div style="font-weight: 700; color: var(--cyber-cyan); margin-bottom: 12px;">Field Statistics Summary</div>
+                  <table class="data-table" id="statsSummaryTable">
+                    <thead><tr><th>Field Name</th><th>Count</th><th>Distinct Values</th><th>Top Value</th></tr></thead>
+                    <tbody></tbody>
+                  </table>
+                </div>
+
+                <!-- Visualization View Container -->
+                <div id="searchVisView" class="hidden" style="padding: 20px;">
+                  <div style="font-weight: 700; color: var(--cyber-cyan); margin-bottom: 12px;">Visual Analytics Chart</div>
+                  <div class="chart-container" style="height: 300px;">
+                    <canvas id="chartSearchVis"></canvas>
+                  </div>
                 </div>
               </div>
             </div>
@@ -432,6 +511,19 @@
         <div style="margin-bottom: 12px; font-size: 12px; color: var(--text-muted);">Current API key passed in HTTP header <code>X-API-Key</code>:</div>
         <input type="text" class="splunk-input" id="currentApiKeyDisplay" readonly style="width: 100%; margin-bottom: 16px;">
         <button class="btn btn-secondary" id="copyApiKeyBtn" style="width: 100%; justify-content: center;">📋 Copy Key to Clipboard</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Field Summary Modal (Splunk-Style) -->
+  <div class="modal-overlay hidden" id="fieldModal">
+    <div class="modal-content" style="max-width: 500px;">
+      <div class="modal-header">
+        <div style="font-weight: 700; font-size: 15px;" id="modalFieldTitle">Field Inspector</div>
+        <button class="btn btn-secondary" style="padding: 2px 8px;" id="closeFieldModal">✕</button>
+      </div>
+      <div class="modal-body" id="modalFieldBody">
+        <div style="color: var(--text-muted);">Loading field value breakdown...</div>
       </div>
     </div>
   </div>
