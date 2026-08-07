@@ -33,16 +33,6 @@ function switchView(view) {
 }
 
 // ---------- Health ----------
-async function checkHealth() {
-  try {
-    await fetch('/api/health').then(r => r.json());
-    const pill = document.getElementById('healthPill');
-    pill.classList.add('ok');
-    pill.innerHTML = '<span class="dot"></span> live';
-  } catch {
-    document.getElementById('healthPill').innerHTML = '<span class="dot"></span> offline';
-  }
-}
 
 async function refreshAlertBadge() {
   try {
@@ -434,7 +424,6 @@ function escapeHtml(str) {
 }
 
 // ---------- Init ----------
-checkHealth();
 loadDashboard();
 setInterval(refreshAlertBadge, 20000);
 setInterval(() => { if (currentView === 'dashboard') loadDashboard(); }, 60000);

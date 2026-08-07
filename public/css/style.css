@@ -83,15 +83,6 @@ html, body {
 }
 
 .sidebar-foot { padding-top: 14px; }
-.status-pill {
-  display: inline-flex; align-items: center; gap: 7px;
-  font-size: 11.5px; color: var(--text-muted);
-  padding: 6px 10px; border-radius: 20px; background: var(--panel-alt);
-  border: 1px solid var(--border);
-}
-.status-pill .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--text-faint); }
-.status-pill.ok .dot { background: var(--good); box-shadow: 0 0 6px var(--good); }
-.status-pill.ok { color: var(--good); }
 
 /* ---------- Main ---------- */
 .main { padding: 28px 36px 60px; max-width: 1200px; }
