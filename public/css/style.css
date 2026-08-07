@@ -250,6 +250,65 @@ html, body {
 .view-container {
   padding: 28px 36px 60px;
   max-width: 1440px;
+  margin: 0 auto;
+}
+
+.app-shell.landing-mode .view-container {
+  max-width: 1140px;
+  margin: 0 auto;
+  padding: 36px 24px 80px;
+}
+
+/* ---------- AI Copilot Floating Widget ---------- */
+.copilot-fab {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  background: linear-gradient(135deg, #2563eb, #8b5cf6);
+  color: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 30px;
+  padding: 12px 22px;
+  font-weight: 700;
+  font-size: 13px;
+  cursor: pointer;
+  box-shadow: 0 8px 30px rgba(37, 99, 235, 0.5);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  z-index: 999;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.copilot-fab:hover {
+  transform: translateY(-4px) scale(1.05);
+  box-shadow: 0 12px 40px rgba(59, 130, 246, 0.7);
+}
+
+.copilot-drawer {
+  position: fixed;
+  bottom: 84px;
+  right: 24px;
+  width: 380px;
+  background: rgba(18, 25, 41, 0.95);
+  backdrop-filter: blur(20px);
+  border: 1px solid var(--border-glow);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6);
+  z-index: 999;
+  overflow: hidden;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.copilot-header {
+  background: linear-gradient(90deg, rgba(37, 99, 235, 0.3), rgba(139, 92, 246, 0.3));
+  padding: 14px 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--border);
+  font-weight: 700;
+  color: #ffffff;
 }
 
 .view-header {
