@@ -184,6 +184,10 @@ html, body {
   min-height: calc(100vh - 58px);
 }
 
+.app-shell.landing-mode {
+  grid-template-columns: 1fr;
+}
+
 /* ---------- Sidebar ---------- */
 .sidebar {
   background: rgba(13, 18, 31, 0.7);

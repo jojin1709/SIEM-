@@ -43,7 +43,7 @@ document.addEventListener('DOMContentLoaded', () => {
   initIngestEvents();
   initBgParticles();
 
-  loadDashboard();
+  switchView('landing');
   refreshAlertBadge();
 
   // Periodically refresh stats
@@ -125,10 +125,26 @@ function initNavigation() {
   document.querySelectorAll('.nav-item').forEach(btn => {
     btn.addEventListener('click', () => switchView(btn.dataset.view));
   });
+
+  document.getElementById('launchSocBtn')?.addEventListener('click', () => switchView('dashboard'));
+  document.getElementById('searchLogsBtn')?.addEventListener('click', () => switchView('search'));
+  document.getElementById('ingestLogsBtn')?.addEventListener('click', () => switchView('ingest'));
 }
 
 function switchView(view) {
   currentView = view;
+
+  const appShell = document.querySelector('.app-shell');
+  const sidebar = document.querySelector('.sidebar');
+
+  if (view === 'landing') {
+    if (sidebar) sidebar.classList.add('hidden');
+    if (appShell) appShell.classList.add('landing-mode');
+  } else {
+    if (sidebar) sidebar.classList.remove('hidden');
+    if (appShell) appShell.classList.remove('landing-mode');
+  }
+
   document.querySelectorAll('.nav-item').forEach(b => b.classList.toggle('active', b.dataset.view === view));
   document.querySelectorAll('.view').forEach(v => v.classList.add('hidden'));
   
