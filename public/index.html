@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="api-key" content="__API_KEY__">
+  <title>Sentinel &mdash; mini SIEM</title>
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+
+<div class="shell">
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-mark">S</div>
+      <div class="brand-text">
+        <div class="brand-name">Sentinel</div>
+        <div class="brand-sub">mini SIEM</div>
+      </div>
+    </div>
+
+    <nav class="nav">
+      <button class="nav-item active" data-view="dashboard">
+        <span class="nav-dot"></span> Overview
+      </button>
+      <button class="nav-item" data-view="search">
+        <span class="nav-dot"></span> Search
+      </button>
+      <button class="nav-item" data-view="alerts">
+        <span class="nav-dot"></span> Alerts <span class="badge" id="alertBadge">0</span>
+      </button>
+      <button class="nav-item" data-view="rules">
+        <span class="nav-dot"></span> Detection Rules
+      </button>
+      <button class="nav-item" data-view="ingest">
+        <span class="nav-dot"></span> Ingest Data
+      </button>
+    </nav>
+
+    <div class="sidebar-foot">
+      <div class="status-pill" id="healthPill">
+        <span class="dot"></span> connecting&hellip;
+      </div>
+    </div>
+  </aside>
+
+  <main class="main">
+
+    <!-- OVERVIEW -->
+    <section class="view" id="view-dashboard">
+      <header class="view-head">
+        <div>
+          <h1>Overview</h1>
+          <p class="sub">Ingested events, detection coverage, and open alerts at a glance.</p>
+        </div>
+        <button class="btn ghost" id="refreshDash">Refresh</button>
+      </header>
+
+      <div class="pulse-strip" id="pulseStrip">
+        <div class="pulse-label">EVENT PULSE</div>
+        <div class="pulse-track" id="pulseTrack"></div>
+      </div>
+
+      <div class="stat-row">
+        <div class="stat-card">
+          <div class="stat-value" id="statTotalEvents">&mdash;</div>
+          <div class="stat-label">Total events</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="statOpenAlerts">&mdash;</div>
+          <div class="stat-label">Open alerts</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="statSources">&mdash;</div>
+          <div class="stat-label">Source types</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="statRules">&mdash;</div>
+          <div class="stat-label">Active rules</div>
+        </div>
+      </div>
+
+      <div class="grid-2">
+        <div class="panel">
+          <h3>Events by source</h3>
+          <canvas id="chartSource" height="220"></canvas>
+        </div>
+        <div class="panel">
+          <h3>Severity breakdown</h3>
+          <canvas id="chartSeverity" height="220"></canvas>
+        </div>
+      </div>
+
+      <div class="grid-2">
+        <div class="panel">
+          <h3>Top source IPs</h3>
+          <table class="mini-table" id="tableTopIps"><tbody></tbody></table>
+        </div>
+        <div class="panel">
+          <h3>Top hosts</h3>
+          <table class="mini-table" id="tableTopHosts"><tbody></tbody></table>
+        </div>
+      </div>
+    </section>
+
+    <!-- SEARCH -->
+    <section class="view hidden" id="view-search">
+      <header class="view-head">
+        <div>
+          <h1>Search</h1>
+          <p class="sub">field:value tokens, "quoted phrases", wildcards (*), and -negation. Space = AND.</p>
+        </div>
+      </header>
+
+      <div class="search-bar">
+        <input type="text" id="searchInput" placeholder='e.g.  source_type:suricata severity:high  or  "failed password"  or  src_ip:192.168.*' />
+        <select id="searchSourceType">
+          <option value="">All sources</option>
+          <option value="syslog">syslog</option>
+          <option value="nginx">nginx</option>
+          <option value="suricata">suricata</option>
+          <option value="winevent">winevent</option>
+          <option value="json">json</option>
+          <option value="raw">raw</option>
+        </select>
+        <select id="searchSeverity">
+          <option value="">All severities</option>
+          <option value="critical">critical</option>
+          <option value="high">high</option>
+          <option value="medium">medium</option>
+          <option value="low">low</option>
+          <option value="info">info</option>
+        </select>
+        <button class="btn primary" id="runSearch">Search</button>
+      </div>
+
+      <div class="search-meta" id="searchMeta"></div>
+
+      <div class="event-table-wrap">
+        <table class="event-table">
+          <thead>
+            <tr>
+              <th>Time</th><th>Source</th><th>Severity</th><th>Host</th><th>Src IP</th><th>Message</th>
+            </tr>
+          </thead>
+          <tbody id="eventTableBody"></tbody>
+        </table>
+      </div>
+      <div class="pager">
+        <button class="btn ghost" id="prevPage">&larr; Prev</button>
+        <span id="pageInfo"></span>
+        <button class="btn ghost" id="nextPage">Next &rarr;</button>
+        <button class="btn ghost" id="exportJsonBtn">Export JSON</button>
+        <button class="btn ghost" id="exportCsvBtn">Export CSV</button>
+      </div>
+    </section>
+
+    <!-- ALERTS -->
+    <section class="view hidden" id="view-alerts">
+      <header class="view-head">
+        <div>
+          <h1>Alerts</h1>
+          <p class="sub">Fired by detection rules. Acknowledge or close as you triage.</p>
+        </div>
+        <button class="btn primary" id="runRulesBtn">Run rules now</button>
+      </header>
+      <div class="filter-row">
+        <button class="chip active" data-status="">All</button>
+        <button class="chip" data-status="open">Open</button>
+        <button class="chip" data-status="acknowledged">Acknowledged</button>
+        <button class="chip" data-status="closed">Closed</button>
+      </div>
+      <div class="alert-list" id="alertList"></div>
+    </section>
+
+    <!-- RULES -->
+    <section class="view hidden" id="view-rules">
+      <header class="view-head">
+        <div>
+          <h1>Detection Rules</h1>
+          <p class="sub">Each rule is a saved search evaluated on a rolling window. Threshold met &rarr; alert fires.</p>
+        </div>
+        <button class="btn primary" id="newRuleBtn">+ New rule</button>
+      </header>
+      <div class="rule-list" id="ruleList"></div>
+    </section>
+
+    <!-- INGEST -->
+    <section class="view hidden" id="view-ingest">
+      <header class="view-head">
+        <div>
+          <h1>Ingest Data</h1>
+          <p class="sub">Upload a log file. Format is auto-detected, or pick one explicitly.</p>
+        </div>
+      </header>
+
+      <div class="panel">
+        <div class="dropzone" id="dropzone">
+          <div class="dz-icon">&uarr;</div>
+          <div class="dz-text">Drop a log file here, or click to browse</div>
+          <div class="dz-sub">syslog &middot; nginx/apache combined &middot; Suricata eve.json &middot; Windows event JSON &middot; generic JSON-lines &middot; plain text</div>
+          <input type="file" id="fileInput" hidden>
+        </div>
+        <div class="ingest-controls">
+          <label for="sourceTypeSelect">Format</label>
+          <select id="sourceTypeSelect">
+            <option value="auto">Auto-detect</option>
+            <option value="syslog">syslog</option>
+            <option value="nginx">nginx / apache</option>
+            <option value="suricata">Suricata eve.json</option>
+            <option value="winevent">Windows event (JSON)</option>
+            <option value="json">Generic JSON-lines</option>
+            <option value="raw">Plain text</option>
+          </select>
+          <button class="btn primary" id="uploadBtn" disabled>Ingest file</button>
+        </div>
+        <div id="ingestResult"></div>
+      </div>
+
+      <div class="panel">
+        <h3>Recent ingests</h3>
+        <table class="mini-table" id="tableIngestHistory"><tbody></tbody></table>
+      </div>
+
+      <div class="panel">
+        <h3>Try it with sample data</h3>
+        <p class="hint">Ships with sample logs under <code>sample-logs/</code> &mdash; syslog auth failures, an nginx access log with a 5xx spike, a Suricata eve.json with a high-severity alert, and a Windows event export. Loading them here time-shifts the events to "just now" so the dashboard and detection rules light up immediately.</p>
+        <button class="btn primary" id="loadSampleBtn">Load sample data</button>
+        <div id="sampleResult" style="margin-top:10px;font-size:12.5px;"></div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<div class="modal-overlay hidden" id="ruleModalOverlay">
+  <div class="modal">
+    <h3 id="ruleModalTitle">New detection rule</h3>
+    <label>Name</label>
+    <input type="text" id="ruleName" placeholder="e.g. SSH brute force attempts">
+    <label>Description</label>
+    <input type="text" id="ruleDescription" placeholder="What this rule catches and why">
+    <label>Query (same syntax as Search)</label>
+    <input type="text" id="ruleQuery" placeholder='e.g. source_type:syslog fail'>
+    <div class="modal-row">
+      <div>
+        <label>Window (minutes)</label>
+        <input type="number" id="ruleWindow" value="5" min="1">
+      </div>
+      <div>
+        <label>Threshold (event count)</label>
+        <input type="number" id="ruleThreshold" value="5" min="1">
+      </div>
+      <div>
+        <label>Severity</label>
+        <select id="ruleSeverity">
+          <option value="critical">critical</option>
+          <option value="high" selected>high</option>
+          <option value="medium">medium</option>
+          <option value="low">low</option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn ghost" id="ruleCancelBtn">Cancel</button>
+      <button class="btn primary" id="ruleSaveBtn">Save rule</button>
+    </div>
+  </div>
+</div>
+
+<script src="/js/vendor/chart.umd.js"></script>
+<script src="/js/app.js"></script>
+</body>
+</html>

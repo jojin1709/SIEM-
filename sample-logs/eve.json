@@ -1,0 +1,5 @@
+{"timestamp":"2026-08-07T10:05:11.223+0530","event_type":"alert","src_ip":"172.16.4.55","dest_ip":"10.0.0.20","host":"ids-01","alert":{"signature":"ET SCAN Nmap Scripting Engine User-Agent Detected","category":"Attempted Information Leak","severity":2}}
+{"timestamp":"2026-08-07T10:05:22.881+0530","event_type":"alert","src_ip":"172.16.4.55","dest_ip":"10.0.0.20","host":"ids-01","alert":{"signature":"ET SCAN Possible Nmap User-Agent Observed","category":"Attempted Information Leak","severity":2}}
+{"timestamp":"2026-08-07T10:06:03.412+0530","event_type":"alert","src_ip":"185.220.101.4","dest_ip":"10.0.0.20","host":"ids-01","alert":{"signature":"ET MALWARE Cobalt Strike Beacon C2 Traffic","category":"A Network Trojan was detected","severity":1}}
+{"timestamp":"2026-08-07T10:06:45.019+0530","event_type":"flow","src_ip":"10.0.0.5","dest_ip":"142.250.183.14","host":"ids-01"}
+{"timestamp":"2026-08-07T10:07:12.500+0530","event_type":"alert","src_ip":"185.220.101.4","dest_ip":"10.0.0.20","host":"ids-01","alert":{"signature":"ET EXPLOIT Possible Log4j RCE Attempt","category":"Web Application Attack","severity":1}}

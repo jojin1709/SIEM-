@@ -1,0 +1,2 @@
+# Custom threat intelligence blocklist
+# Add your own IPs/domains here

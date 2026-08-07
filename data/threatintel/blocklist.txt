@@ -1,0 +1,8 @@
+# Sample threat intelligence blocklist
+# One IP or domain per line, # comments are ignored
+1.1.1.1
+8.8.8.8
+198.51.100.9
+45.83.12.4
+malware-c2.example.com
+evil-domain.net

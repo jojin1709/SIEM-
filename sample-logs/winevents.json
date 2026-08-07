@@ -1,0 +1,5 @@
+{"TimeCreated":"2026-08-07T10:10:01+05:30","Computer":"DC01.corp.local","EventID":4625,"Level":"Warning","Message":"An account failed to log on. Account Name: administrator Source Network Address: 10.10.5.20"}
+{"TimeCreated":"2026-08-07T10:10:03+05:30","Computer":"DC01.corp.local","EventID":4625,"Level":"Warning","Message":"An account failed to log on. Account Name: administrator Source Network Address: 10.10.5.20"}
+{"TimeCreated":"2026-08-07T10:10:05+05:30","Computer":"DC01.corp.local","EventID":4740,"Level":"Critical","Message":"A user account was locked out. Account Name: administrator Caller Computer Name: WKS-14"}
+{"TimeCreated":"2026-08-07T10:11:00+05:30","Computer":"DC01.corp.local","EventID":4624,"Level":"Information","Message":"An account was successfully logged on. Account Name: jsmith"}
+{"TimeCreated":"2026-08-07T10:12:30+05:30","Computer":"DC01.corp.local","EventID":1102,"Level":"Critical","Message":"The audit log was cleared. Subject: SYSTEM"}

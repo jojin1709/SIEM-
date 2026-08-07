@@ -1,0 +1,67 @@
+# Contributing Developer Certificate of Origin
+
+Copyright (C) 2025 JOJIN JOHN
+
+Everyone is permitted to copy and distribute verbatim copies of this
+license document, but changing it is not allowed.
+
+## Developer Certificate of Origin
+Version 1.0
+
+Copyright (C) 2025 JOJIN JOHN
+
+Everyone is permitted to copy and distribute verbatim copies of this
+license document, but changing it is not allowed.
+
+
+Developer's Certificate of Origin 1.0.0
+
+License: This
+Developer Certificate of Origin (DCO) is a lightweight way for
+contributors to certify that they wrote or otherwise have the right to
+submit the code they are contributing to the project.
+
+The DCO is a recognized method for establishing the provenance of
+contributions, and it is used by many open-source projects as the
+preferred method for accepting patches.
+
+The act of contributing in itself (as defined in the DCO) means that
+the contributor has read and agrees to the DCO.
+
+The DCO is a legally significant document, and it should be read
+carefully.
+
+If you have any questions about the DCO, please contact the project
+maintainer.
+
+---
+
+By making a contribution to this project, I certify that:
+
+1. The contribution was created in whole or in part by me and I have the
+   right to submit it under the open source license(s) indicated in the
+   file; or
+
+2. The contribution is based on previous versions of the project that
+   are covered under an open source license and I have the right to
+   submit that contribution under the open source license(s) indicated
+   in the file, with the same author(s) as the previous versions; or
+
+3. The contribution was provided directly to me by some other person who
+   certified (a), (b), or (c) in a letter to me and I have not modified
+   it.
+
+4. The project is a work in progress, which may change at any time. The
+   licenses granted under this DCO are not exclusive, and the project
+   maintainers are not required to accept any contribution.
+
+5. I am (a) a legally recognized person (natural or juridical) and I
+   have the capacity to enter into this DCO, or (b) a minor, and my
+   parent or guardian has read and agrees to this DCO on my behalf.
+
+6. I understand that the project is distributed under the MIT license,
+   and therefore I grant to the project a perpetual, worldwide,
+   non-exclusive, no-charge, royalty-free, irrevocable copyright
+   license to reproduce, prepare derivative works of, publicly display,
+   publicly perform, sublicense, and distribute my contributions and
+   such derivative works.
