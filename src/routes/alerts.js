@@ -132,6 +132,26 @@ router.get('/', (req, res) => {
   res.json({ alerts: rows, total, page: pageNum, limit: limitNum });
 });
 
+router.get('/:id', (req, res) => {
+  const id = Number(req.params.id);
+  if (isNaN(id)) return res.status(400).json({ error: 'Invalid alert ID' });
+  const alert = db.prepare('SELECT * FROM alerts WHERE id = ?').get(id);
+  if (!alert) return res.status(404).json({ error: 'Alert not found' });
+
+  let sampleEvents = [];
+  if (alert.sample_event_ids) {
+    try {
+      const sampleIds = JSON.parse(alert.sample_event_ids);
+      if (Array.isArray(sampleIds) && sampleIds.length > 0) {
+        const placeholders = sampleIds.map(() => '?').join(',');
+        sampleEvents = db.prepare(`SELECT * FROM events WHERE id IN (${placeholders}) ORDER BY ts DESC`).all(...sampleIds);
+      }
+    } catch (e) { console.error('[alerts] sample parse error:', e.message); }
+  }
+
+  res.json({ alert, sample_events: sampleEvents });
+});
+
 router.patch('/:id', (req, res) => {
   const id = Number(req.params.id);
   if (isNaN(id)) return res.status(400).json({ error: 'Invalid alert ID' });

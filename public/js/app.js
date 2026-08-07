@@ -1,13 +1,21 @@
-const API = '';
-let API_KEY = '';
+/* ==========================================================================
+   SIEM++ — Splunk-Inspired Cyber Security Frontend Application Logic
+   ========================================================================== */
+
+let API_KEY = document.querySelector('meta[name="api-key"]')?.content || '';
+if (!API_KEY || API_KEY === '__API_KEY__') {
+  API_KEY = 'siem-default-key-12345';
+}
+
 let currentView = 'dashboard';
 let searchPage = 1;
-let searchTotal = 0;
+let timeRangePreset = 'all';
 let alertStatusFilter = '';
-let chartSource, chartSeverity;
+let activeAlertId = null;
+let chartSource = null;
+let chartSeverity = null;
 
-API_KEY = document.querySelector('meta[name="api-key"]')?.content || '';
-
+// ---------- API Fetch Helper ----------
 async function apiFetch(url, options = {}) {
   const headers = options.headers || {};
   headers['X-API-Key'] = API_KEY;
@@ -16,414 +24,658 @@ async function apiFetch(url, options = {}) {
 
 window.apiFetch = apiFetch;
 
-// ---------- Nav ----------
-document.querySelectorAll('.nav-item').forEach(btn => {
-  btn.addEventListener('click', () => switchView(btn.dataset.view));
+// ---------- Initialize App ----------
+document.addEventListener('DOMContentLoaded', () => {
+  initClock();
+  initNavigation();
+  initSearchEvents();
+  initAlertEvents();
+  initRuleEvents();
+  initThreatIntelEvents();
+  initIngestEvents();
+  initApiKeyModal();
+
+  loadDashboard();
+  refreshAlertBadge();
+
+  // Periodically refresh stats
+  setInterval(refreshAlertBadge, 15000);
 });
+
+// ---------- UTC Clock ----------
+function initClock() {
+  function updateClock() {
+    const now = new Date();
+    const utcStr = now.toUTCString().split(' ')[4];
+    const clockEl = document.getElementById('utcClock');
+    if (clockEl) clockEl.textContent = `UTC ${utcStr}`;
+  }
+  updateClock();
+  setInterval(updateClock, 1000);
+}
+
+// ---------- Navigation Router ----------
+function initNavigation() {
+  document.querySelectorAll('.nav-item').forEach(btn => {
+    btn.addEventListener('click', () => switchView(btn.dataset.view));
+  });
+}
 
 function switchView(view) {
   currentView = view;
   document.querySelectorAll('.nav-item').forEach(b => b.classList.toggle('active', b.dataset.view === view));
   document.querySelectorAll('.view').forEach(v => v.classList.add('hidden'));
-  document.getElementById('view-' + view).classList.remove('hidden');
+  
+  const targetView = document.getElementById('view-' + view);
+  if (targetView) targetView.classList.remove('hidden');
+
   if (view === 'dashboard') loadDashboard();
+  if (view === 'search') loadSearch();
   if (view === 'alerts') loadAlerts();
   if (view === 'rules') loadRules();
+  if (view === 'threatintel') loadThreatIntel();
   if (view === 'ingest') loadIngestHistory();
 }
 
-// ---------- Health ----------
-
+// ---------- Alert Count Badge ----------
 async function refreshAlertBadge() {
   try {
     const resp = await apiFetch('/api/alerts?status=open').then(r => r.json());
     const alerts = Array.isArray(resp) ? resp : (resp.alerts || []);
-    document.getElementById('alertBadge').textContent = alerts.length;
+    const badge = document.getElementById('alertBadge');
+    if (badge) badge.textContent = alerts.length;
   } catch {
-    document.getElementById('alertBadge').textContent = '?';
+    const badge = document.getElementById('alertBadge');
+    if (badge) badge.textContent = '?';
   }
 }
 
-// ---------- Dashboard ----------
+// ---------- Overview Dashboard ----------
 async function loadDashboard() {
   try {
     const stats = await apiFetch('/api/dashboard/stats').then(r => r.json());
     const rules = await apiFetch('/api/alerts/rules').then(r => r.json());
 
-    document.getElementById('statTotalEvents').textContent = stats.totalEvents.toLocaleString();
-    document.getElementById('statOpenAlerts').textContent = stats.totalAlerts;
-    document.getElementById('statSources').textContent = stats.bySource.length;
-    document.getElementById('statRules').textContent = rules.filter(r => r.enabled).length;
+    document.getElementById('statTotalEvents').textContent = (stats.totalEvents || 0).toLocaleString();
+    document.getElementById('statOpenAlerts').textContent = stats.totalAlerts || 0;
+    document.getElementById('statSources').textContent = (stats.bySource || []).length;
+    document.getElementById('statRules').textContent = (rules || []).filter(r => r.enabled).length;
 
-    renderPulse(stats.timeline);
-    renderSourceChart(stats.bySource);
-    renderSeverityChart(stats.bySeverity);
-    renderMiniTable('tableTopIps', stats.topSrcIps, 'src_ip');
-    renderMiniTable('tableTopHosts', stats.topHosts, 'host');
-
-    refreshAlertBadge();
-  } catch (e) {
-    document.getElementById('statTotalEvents').textContent = 'error';
+    renderPulseTrack(stats.timeline || []);
+    renderSourceChart(stats.bySource || []);
+    renderSeverityChart(stats.bySeverity || []);
+    renderTopIpsTable(stats.topSrcIps || []);
+    renderTopHostsTable(stats.topHosts || []);
+  } catch (err) {
+    console.error('Dashboard load error:', err);
   }
 }
 
-function renderPulse(timeline) {
+document.getElementById('refreshDash')?.addEventListener('click', loadDashboard);
+
+function renderPulseTrack(timeline) {
   const track = document.getElementById('pulseTrack');
+  const countLabel = document.getElementById('pulseCountLabel');
+  if (!track) return;
   track.innerHTML = '';
+
   if (!timeline.length) {
-    track.innerHTML = '<div style="color:var(--text-faint);font-size:12px;">No events ingested yet.</div>';
+    track.innerHTML = '<div style="font-size:11px; color:var(--text-faint); margin:auto;">No log activity recorded yet</div>';
+    if (countLabel) countLabel.textContent = '0 events';
     return;
   }
-  const max = Math.max(...timeline.map(t => t.count), 1);
-  timeline.slice(-96).forEach(t => {
+
+  const maxCount = Math.max(...timeline.map(t => t.count), 1);
+  const totalInTimeline = timeline.reduce((s, t) => s + t.count, 0);
+  if (countLabel) countLabel.textContent = `${totalInTimeline.toLocaleString()} events`;
+
+  timeline.forEach(t => {
     const bar = document.createElement('div');
     bar.className = 'pulse-bar';
-    bar.style.height = Math.max(4, (t.count / max) * 46) + 'px';
-    bar.title = `${new Date(t.hour).toLocaleString()}: ${t.count} events`;
+    const heightPct = Math.max(8, Math.round((t.count / maxCount) * 100));
+    bar.style.height = `${heightPct}%`;
+    bar.title = `${t.count} events at ${new Date(t.hour).toLocaleString()}`;
     track.appendChild(bar);
   });
 }
 
-function renderMiniTable(id, rows, keyField) {
-  const tbody = document.querySelector('#' + id + ' tbody');
-  tbody.innerHTML = '';
-  if (!rows.length) {
-    tbody.innerHTML = '<tr><td colspan="2" style="color:var(--text-faint);">No data</td></tr>';
-    return;
-  }
-  rows.forEach(r => {
-    const tr = document.createElement('tr');
-    tr.innerHTML = `<td>${escapeHtml(r[keyField] || '-')}</td><td>${r.c}</td>`;
-    tbody.appendChild(tr);
-  });
-}
-
-function renderSourceChart(bySource) {
-  const ctx = document.getElementById('chartSource');
+function renderSourceChart(data) {
+  const ctx = document.getElementById('chartSource')?.getContext('2d');
+  if (!ctx) return;
   if (chartSource) chartSource.destroy();
+
+  const labels = data.map(d => d.source_type);
+  const counts = data.map(d => d.c);
+
   chartSource = new Chart(ctx, {
     type: 'doughnut',
     data: {
-      labels: bySource.map(s => s.source_type),
+      labels,
       datasets: [{
-        data: bySource.map(s => s.c),
-        backgroundColor: ['#7C6FF0', '#4EA1F3', '#34D399', '#F0B429', '#F0546B', '#8A93A3'],
-        borderColor: '#12161D',
-        borderWidth: 2
+        data: counts,
+        backgroundColor: ['#00f2fe', '#0077ff', '#00ff88', '#ff9900', '#ff0055', '#8a2be2'],
+        borderWidth: 2,
+        borderColor: '#0f1424'
       }]
     },
     options: {
-      plugins: { legend: { position: 'right', labels: { color: '#8A93A3', boxWidth: 10, font: { size: 11 } } } }
-    }
-  });
-}
-
-function renderSeverityChart(bySeverity) {
-  const order = ['critical', 'high', 'medium', 'low', 'info'];
-  const colors = { critical: '#F0546B', high: '#F08A99', medium: '#F0B429', low: '#4EA1F3', info: '#8A93A3' };
-  const sorted = [...bySeverity].sort((a, b) => order.indexOf(a.severity) - order.indexOf(b.severity));
-  const ctx = document.getElementById('chartSeverity');
-  if (chartSeverity) chartSeverity.destroy();
-  chartSeverity = new Chart(ctx, {
-    type: 'bar',
-    data: {
-      labels: sorted.map(s => s.severity),
-      datasets: [{ data: sorted.map(s => s.c), backgroundColor: sorted.map(s => colors[s.severity] || '#8A93A3') }]
-    },
-    options: {
-      plugins: { legend: { display: false } },
-      scales: {
-        x: { ticks: { color: '#8A93A3' }, grid: { display: false } },
-        y: { ticks: { color: '#8A93A3' }, grid: { color: '#232935' } }
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'right', labels: { color: '#8b9bb4', font: { family: 'Inter', size: 11 } } }
       }
     }
   });
 }
 
-document.getElementById('refreshDash').addEventListener('click', loadDashboard);
+function renderSeverityChart(data) {
+  const ctx = document.getElementById('chartSeverity')?.getContext('2d');
+  if (!ctx) return;
+  if (chartSeverity) chartSeverity.destroy();
 
-// ---------- Search ----------
-async function runSearch(page = 1) {
-  searchPage = page;
-  const q = document.getElementById('searchInput').value;
-  const source_type = document.getElementById('searchSourceType').value;
-  const severity = document.getElementById('searchSeverity').value;
-  const params = new URLSearchParams({ q, source_type, severity, page, pageSize: 50 });
-  const res = await apiFetch('/api/search?' + params.toString()).then(r => r.json());
+  const severityOrder = ['critical', 'high', 'medium', 'low', 'info'];
+  const colorMap = { critical: '#ff0055', high: '#ff9900', medium: '#00c3ff', low: '#00ff88', info: '#4e5e78' };
 
-  if (res.error) {
-    document.getElementById('searchMeta').textContent = 'Query error: ' + (res.message || res.error);
-    return;
-  }
+  const map = {};
+  data.forEach(d => map[d.severity] = d.c);
 
-  searchTotal = res.total;
-  document.getElementById('searchMeta').textContent = `${res.total.toLocaleString()} events matched`;
-  const tbody = document.getElementById('eventTableBody');
-  tbody.innerHTML = '';
-  if (!res.results.length) {
-    tbody.innerHTML = '<tr><td colspan="6" style="color:var(--text-faint);padding:20px;">No matching events. Try ingesting some data first.</td></tr>';
-  }
-  res.results.forEach(ev => {
-    const tiHit = ev.threat_intel_hit ? '<span class="ti-hit" title="Threat Intel Hit" style="margin-left:4px;color:#F0546B;font-size:11px;">&#9888;</span>' : '';
-    const tr = document.createElement('tr');
-    tr.innerHTML = `
-      <td class="mono">${new Date(ev.ts).toLocaleString()}</td>
-      <td class="mono">${escapeHtml(ev.source_type)}</td>
-      <td><span class="sev-pill sev-${escapeHtml(ev.severity)}">${escapeHtml(ev.severity)}</span></td>
-      <td class="mono">${escapeHtml(ev.host || '-')}</td>
-      <td class="mono">${escapeHtml(ev.src_ip || '-')}</td>
-      <td>${escapeHtml(ev.message || '')}${tiHit}</td>
-    `;
-    tbody.appendChild(tr);
+  chartSeverity = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: severityOrder.map(s => s.toUpperCase()),
+      datasets: [{
+        data: severityOrder.map(s => map[s] || 0),
+        backgroundColor: severityOrder.map(s => colorMap[s]),
+        borderRadius: 4
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { grid: { display: false }, ticks: { color: '#8b9bb4' } },
+        y: { grid: { color: '#1b2438' }, ticks: { color: '#8b9bb4' } }
+      }
+    }
   });
-  const totalPages = Math.max(1, Math.ceil(searchTotal / 50));
-  document.getElementById('pageInfo').textContent = `Page ${searchPage} of ${totalPages}`;
 }
 
-async function exportResults(format) {
-  const q = document.getElementById('searchInput').value;
-  const source_type = document.getElementById('searchSourceType').value;
-  const severity = document.getElementById('searchSeverity').value;
-  const params = new URLSearchParams({ q, source_type, severity, format });
+function renderTopIpsTable(rows) {
+  const tbody = document.querySelector('#tableTopIps tbody');
+  if (!tbody) return;
+  tbody.innerHTML = rows.map(r => `
+    <tr>
+      <td style="font-family: var(--font-mono); color: var(--cyber-cyan);">${r.src_ip}</td>
+      <td style="text-align: right; font-family: var(--font-mono); font-weight: 700; color: var(--text-main);">${r.c.toLocaleString()}</td>
+    </tr>
+  `).join('') || '<tr><td colspan="2" style="color:var(--text-faint); text-align:center;">No data</td></tr>';
+}
+
+function renderTopHostsTable(rows) {
+  const tbody = document.querySelector('#tableTopHosts tbody');
+  if (!tbody) return;
+  tbody.innerHTML = rows.map(r => `
+    <tr>
+      <td style="font-family: var(--font-mono); color: var(--text-main);">${r.host}</td>
+      <td style="text-align: right; font-family: var(--font-mono); font-weight: 700; color: var(--text-main);">${r.c.toLocaleString()}</td>
+    </tr>
+  `).join('') || '<tr><td colspan="2" style="color:var(--text-faint); text-align:center;">No data</td></tr>';
+}
+
+// ---------- Splunk-Style Search & Logs ----------
+function initSearchEvents() {
+  document.getElementById('doSearch')?.addEventListener('click', () => {
+    searchPage = 1;
+    loadSearch();
+  });
+
+  document.getElementById('searchQuery')?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      searchPage = 1;
+      loadSearch();
+    }
+  });
+
+  document.querySelectorAll('.preset-btn[data-range]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.preset-btn[data-range]').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      timeRangePreset = btn.dataset.range;
+      searchPage = 1;
+      loadSearch();
+    });
+  });
+
+  document.getElementById('prevPage')?.addEventListener('click', () => {
+    if (searchPage > 1) { searchPage--; loadSearch(); }
+  });
+  document.getElementById('nextPage')?.addEventListener('click', () => {
+    searchPage++; loadSearch();
+  });
+
+  document.getElementById('exportCsvBtn')?.addEventListener('click', () => exportSearch('csv'));
+  document.getElementById('exportJsonBtn')?.addEventListener('click', () => exportSearch('json'));
+
+  // Field Drawer Click Helper
+  document.querySelectorAll('.field-item').forEach(item => {
+    item.addEventListener('click', () => {
+      const fieldName = item.dataset.field;
+      const input = document.getElementById('searchQuery');
+      if (input) {
+        input.value = input.value.trim() ? `${input.value} ${fieldName}:` : `${fieldName}:`;
+        input.focus();
+      }
+    });
+  });
+}
+
+function getTimeRangeParams() {
+  const now = Date.now();
+  if (timeRangePreset === '15m') return { from: now - 15 * 60 * 1000, to: now };
+  if (timeRangePreset === '1h') return { from: now - 60 * 60 * 1000, to: now };
+  if (timeRangePreset === '24h') return { from: now - 24 * 60 * 60 * 1000, to: now };
+  return {};
+}
+
+async function loadSearch() {
+  const query = document.getElementById('searchQuery')?.value.trim() || '';
+  const resultsBox = document.getElementById('searchResults');
+  const countBox = document.getElementById('searchResultsCount');
+
+  if (resultsBox) resultsBox.innerHTML = '<div style="padding: 30px; text-align: center; color: var(--text-faint);">Searching logs...</div>';
+
   try {
-    const resp = await apiFetch('/api/search/export?' + params.toString());
-    const blob = await resp.blob();
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `siem-export.${format}`;
-    document.body.appendChild(a);
-    a.click();
-    window.URL.revokeObjectURL(url);
-    document.body.removeChild(a);
-  } catch (e) {
-    alert('Export failed: ' + e.message);
+    const { from, to } = getTimeRangeParams();
+    let url = `/api/search?q=${encodeURIComponent(query)}&page=${searchPage}&pageSize=30`;
+    if (from) url += `&from=${from}`;
+    if (to) url += `&to=${to}`;
+
+    const resp = await apiFetch(url).then(r => r.json());
+    const results = resp.results || [];
+    const total = resp.total || 0;
+
+    if (countBox) countBox.textContent = `${total.toLocaleString()} logs matched (Page ${searchPage} of ${resp.totalPages || 1})`;
+
+    updateFieldDrawerCounts(results);
+
+    if (!results.length) {
+      if (resultsBox) resultsBox.innerHTML = '<div style="padding: 40px; text-align: center; color: var(--text-faint);">No matching log entries found</div>';
+      return;
+    }
+
+    renderSearchResults(results);
+  } catch (err) {
+    if (resultsBox) resultsBox.innerHTML = `<div style="padding: 30px; text-align: center; color: var(--critical-red);">Search failed: ${err.message}</div>`;
   }
 }
 
-document.getElementById('runSearch').addEventListener('click', () => runSearch(1));
-document.getElementById('searchInput').addEventListener('keydown', e => { if (e.key === 'Enter') runSearch(1); });
-document.getElementById('prevPage').addEventListener('click', () => { if (searchPage > 1) runSearch(searchPage - 1); });
-document.getElementById('nextPage').addEventListener('click', () => {
-  if (searchPage * 50 < searchTotal) runSearch(searchPage + 1);
-});
-document.getElementById('exportJsonBtn').addEventListener('click', () => exportResults('json'));
-document.getElementById('exportCsvBtn').addEventListener('click', () => exportResults('csv'));
+function updateFieldDrawerCounts(results) {
+  const fieldCounts = { source_type: {}, severity: {}, src_ip: {}, user: {}, host: {} };
 
-// ---------- Alerts ----------
-async function loadAlerts() {
-  const url = alertStatusFilter ? `/api/alerts?status=${alertStatusFilter}` : '/api/alerts';
-  const resp = await apiFetch(url).then(r => r.json());
-  const alerts = Array.isArray(resp) ? resp : (resp.alerts || []);
-  const list = document.getElementById('alertList');
-  list.innerHTML = '';
-  if (!alerts.length) {
-    list.innerHTML = '<div class="panel" style="color:var(--text-faint);">No alerts yet. They will appear here once a detection rule matches, or click "Run rules now".</div>';
-    return;
-  }
-  alerts.forEach(a => {
-    const borderClass = a.severity === 'medium' ? 'sev-medium-border' : a.severity === 'low' ? 'sev-low-border' : '';
-    const card = document.createElement('div');
-    card.className = `alert-card ${borderClass} status-${a.status}`;
-      card.innerHTML = `
-        <div>
-          <div class="alert-title">${escapeHtml(a.rule_name)}</div>
-          <div class="alert-meta">${a.matched_count} events in ${a.window_minutes}m &middot; ${new Date(a.triggered_at).toLocaleString()} &middot; <span class="sev-pill sev-${escapeHtml(a.severity)}">${escapeHtml(a.severity)}</span> &middot; ${a.status}</div>
-        </div>
-        <div class="alert-actions">
-          ${a.status !== 'acknowledged' ? `<button class="btn ghost" data-action="acknowledged" data-id="${a.id}">Acknowledge</button>` : ''}
-          ${a.status !== 'closed' ? `<button class="btn ghost" data-action="closed" data-id="${a.id}">Close</button>` : ''}
-        </div>
-      `;
-    list.appendChild(card);
+  results.forEach(r => {
+    ['source_type', 'severity', 'src_ip', 'user', 'host'].forEach(f => {
+      if (r[f]) fieldCounts[f][r[f]] = (fieldCounts[f][r[f]] || 0) + 1;
+    });
   });
 
-  list.querySelectorAll('button[data-action]').forEach(btn => {
-    btn.addEventListener('click', async () => {
-       await apiFetch(`/api/alerts/${btn.dataset.id}`, {
-        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: btn.dataset.action })
-      });
+  Object.keys(fieldCounts).forEach(f => {
+    const el = document.getElementById(`fc-${f}`);
+    if (el) el.textContent = Object.keys(fieldCounts[f]).length;
+  });
+}
+
+function renderSearchResults(results) {
+  const resultsBox = document.getElementById('searchResults');
+  if (!resultsBox) return;
+
+  resultsBox.innerHTML = results.map(r => {
+    const timeStr = new Date(r.ts).toLocaleString();
+    const severity = r.severity || 'info';
+    const jsonParsed = JSON.stringify(r.parsed || {}, null, 2);
+    const tiHitBadge = r.threat_intel_hit ? `<span class="log-badge critical">⚠️ THREAT INTEL MATCH (${r.threat_intel_hit.value})</span>` : '';
+
+    return `
+      <div class="log-row-container" data-id="${r.id}">
+        <div class="log-row-header">
+          <span class="log-time">${timeStr}</span>
+          <span class="log-badge ${severity}">${severity}</span>
+          <span class="log-badge info">${r.source_type}</span>
+          ${tiHitBadge}
+          <span class="log-message">${escapeHtml(r.message || r.raw)}</span>
+        </div>
+        <div class="log-detail-box hidden" id="log-detail-${r.id}">
+          <div style="margin-bottom: 8px; font-weight: 700; color: var(--cyber-cyan);">Extracted & Parsed Log Fields</div>
+          <pre class="log-json">${escapeHtml(jsonParsed)}</pre>
+          <div style="margin-top: 10px; color: var(--text-faint); font-size: 11px;">
+            Raw Entry: <code>${escapeHtml(r.raw)}</code>
+          </div>
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  // Toggle log inspector
+  document.querySelectorAll('.log-row-header').forEach(hdr => {
+    hdr.addEventListener('click', () => {
+      const container = hdr.closest('.log-row-container');
+      const id = container.dataset.id;
+      const detail = document.getElementById(`log-detail-${id}`);
+      if (detail) detail.classList.toggle('hidden');
+    });
+  });
+}
+
+function exportSearch(format) {
+  const query = document.getElementById('searchQuery')?.value.trim() || '';
+  const { from, to } = getTimeRangeParams();
+  let url = `/api/search/export?q=${encodeURIComponent(query)}&format=${format}`;
+  if (from) url += `&from=${from}`;
+  if (to) url += `&to=${to}`;
+  window.open(url, '_blank');
+}
+
+// ---------- Security Alerts & Triage ----------
+function initAlertEvents() {
+  document.querySelectorAll('#view-alerts .preset-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('#view-alerts .preset-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      alertStatusFilter = btn.dataset.status;
+      loadAlerts();
+    });
+  });
+
+  document.getElementById('runRulesBtn')?.addEventListener('click', async () => {
+    try {
+      const resp = await apiFetch('/api/alerts/rules/run', { method: 'POST' }).then(r => r.json());
+      alert(`Rule Evaluation Complete! Fired ${resp.fired.length} alert(s).`);
       loadAlerts();
       refreshAlertBadge();
-    });
+    } catch (e) { alert('Failed to run rules: ' + e.message); }
   });
+
+  document.getElementById('closeAlertModal')?.addEventListener('click', closeAlertModal);
+  document.getElementById('ackAlertBtn')?.addEventListener('click', () => updateAlertStatus('acknowledged'));
+  document.getElementById('closeAlertStatusBtn')?.addEventListener('click', () => updateAlertStatus('closed'));
 }
 
-document.querySelectorAll('.chip').forEach(chip => {
-  chip.addEventListener('click', () => {
-    document.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
-    chip.classList.add('active');
-    alertStatusFilter = chip.dataset.status;
-    loadAlerts();
-  });
-});
+async function loadAlerts() {
+  const tbody = document.querySelector('#alertsTable tbody');
+  if (!tbody) return;
+  tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; color:var(--text-faint);">Loading alerts...</td></tr>';
 
-document.getElementById('runRulesBtn').addEventListener('click', async () => {
-  const btn = document.getElementById('runRulesBtn');
-  btn.textContent = 'Running\u2026';
-  const res = await apiFetch('/api/alerts/rules/run', { method: 'POST' }).then(r => r.json());
-  btn.textContent = 'Run rules now';
-  loadAlerts();
-  refreshAlertBadge();
-  if (res.fired.length) {
-    alert(`${res.fired.length} rule(s) fired: ${res.fired.map(f => f.ruleName).join(', ')}`);
-  } else {
-    alert('Rules evaluated \u2014 nothing crossed threshold.');
+  try {
+    let url = '/api/alerts';
+    if (alertStatusFilter) url += `?status=${alertStatusFilter}`;
+    const resp = await apiFetch(url).then(r => r.json());
+    const alerts = resp.alerts || [];
+
+    if (!alerts.length) {
+      tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; color:var(--text-faint); padding:30px;">No alerts match filter</td></tr>';
+      return;
+    }
+
+    tbody.innerHTML = alerts.map(a => `
+      <tr style="cursor: pointer;" onclick="openAlertModal(${a.id})">
+        <td style="font-weight: 700; color: var(--text-main);">${escapeHtml(a.rule_name)}</td>
+        <td><span class="log-badge ${a.severity}">${a.severity}</span></td>
+        <td style="font-family: var(--font-mono); font-weight: 700;">${a.matched_count} events</td>
+        <td style="font-family: var(--font-mono); color: var(--text-faint);">${new Date(a.triggered_at).toLocaleString()}</td>
+        <td><span class="status-pill" style="padding: 2px 8px; font-size: 10.5px;">${a.status}</span></td>
+        <td style="text-align: right;">
+          <button class="btn btn-secondary" style="padding: 2px 8px; font-size: 11px;">Triage</button>
+        </td>
+      </tr>
+    `).join('');
+  } catch (err) {
+    tbody.innerHTML = `<tr><td colspan="6" style="color:var(--critical-red); text-align:center;">Failed to load alerts</td></tr>`;
   }
-});
+}
 
-// ---------- Rules ----------
-async function loadRules() {
-  const rules = await apiFetch('/api/alerts/rules').then(r => r.json());
-  const list = document.getElementById('ruleList');
-  list.innerHTML = '';
-  rules.forEach(r => {
-    const card = document.createElement('div');
-    card.className = 'rule-card';
-    card.innerHTML = `
-      <div class="rule-info">
-        <div class="rule-name">${escapeHtml(r.name)} <span class="sev-pill sev-${escapeHtml(r.severity)}">${escapeHtml(r.severity)}</span></div>
-        <div class="rule-desc">${escapeHtml(r.description || '')}</div>
-        <span class="rule-query">${escapeHtml(r.query)}</span>
-        <span class="rule-cond">&ge; ${r.threshold} matches / ${r.window_minutes}m</span>
+async function openAlertModal(id) {
+  activeAlertId = id;
+  const modal = document.getElementById('alertModal');
+  const body = document.getElementById('modalAlertBody');
+  const title = document.getElementById('modalAlertTitle');
+
+  if (modal) modal.classList.remove('hidden');
+  if (body) body.innerHTML = '<div style="color: var(--text-muted);">Loading alert events...</div>';
+
+  try {
+    const data = await apiFetch(`/api/alerts/${id}`).then(r => r.json());
+    const alert = data.alert;
+    const sampleEvents = data.sample_events || [];
+
+    if (title) title.textContent = alert.rule_name;
+
+    body.innerHTML = `
+      <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 20px; background: var(--bg-dark); padding: 14px; border-radius: var(--radius-sm); border: 1px solid var(--border);">
+        <div><div style="font-size:11px; color:var(--text-faint);">SEVERITY</div><span class="log-badge ${alert.severity}">${alert.severity}</span></div>
+        <div><div style="font-size:11px; color:var(--text-faint);">STATUS</div><span class="status-pill">${alert.status}</span></div>
+        <div><div style="font-size:11px; color:var(--text-faint);">WINDOW</div><span style="font-family:var(--font-mono); color:var(--text-main);">${alert.window_minutes}m</span></div>
       </div>
-      <div class="rule-actions">
-        <button class="toggle ${r.enabled ? 'on' : ''}" data-id="${r.id}" data-enabled="${r.enabled}" title="Enable/disable"></button>
-        <button class="btn ghost" data-del="${r.id}">Delete</button>
+
+      <div style="font-weight: 700; color: var(--cyber-cyan); margin-bottom: 10px;">Matched Log Evidence (${sampleEvents.length} sample entries)</div>
+      <div style="max-height: 250px; overflow-y: auto; background: var(--bg-dark); border-radius: var(--radius-sm); border: 1px solid var(--border);">
+        <table class="data-table">
+          <thead><tr><th>Time</th><th>Source</th><th>Raw Message</th></tr></thead>
+          <tbody>
+            ${sampleEvents.map(e => `
+              <tr>
+                <td style="font-family:var(--font-mono); font-size:11px;">${new Date(e.ts).toLocaleTimeString()}</td>
+                <td><span class="log-badge info">${e.source_type}</span></td>
+                <td style="font-family:var(--font-mono); font-size:11px;">${escapeHtml(e.message || e.raw)}</td>
+              </tr>
+            `).join('') || '<tr><td colspan="3" style="text-align:center;">No sample log events found</td></tr>'}
+          </tbody>
+        </table>
       </div>
     `;
-    list.appendChild(card);
+  } catch (err) {
+    if (body) body.innerHTML = `<div style="color:var(--critical-red);">Failed to load alert details</div>`;
+  }
+}
+
+window.openAlertModal = openAlertModal;
+
+function closeAlertModal() {
+  const modal = document.getElementById('alertModal');
+  if (modal) modal.classList.add('hidden');
+}
+
+async function updateAlertStatus(newStatus) {
+  if (!activeAlertId) return;
+  try {
+    await apiFetch(`/api/alerts/${activeAlertId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: newStatus })
+    });
+    closeAlertModal();
+    loadAlerts();
+    refreshAlertBadge();
+  } catch (err) { alert('Failed to update alert status'); }
+}
+
+// ---------- Detection Rules ----------
+function initRuleEvents() {
+  document.getElementById('openNewRuleModal')?.addEventListener('click', () => {
+    document.getElementById('ruleModal')?.classList.remove('hidden');
+  });
+  document.getElementById('closeRuleModal')?.addEventListener('click', () => {
+    document.getElementById('ruleModal')?.classList.add('hidden');
   });
 
-  list.querySelectorAll('.toggle').forEach(t => {
-    t.addEventListener('click', async () => {
-      const enabled = t.dataset.enabled === '1' ? 0 : 1;
-       await apiFetch(`/api/alerts/rules/${t.dataset.id}`, {
-        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ enabled })
+  document.getElementById('createRuleForm')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const name = document.getElementById('ruleName').value;
+    const query = document.getElementById('ruleQuery').value;
+    const window_minutes = document.getElementById('ruleWindow').value;
+    const threshold = document.getElementById('ruleThreshold').value;
+    const severity = document.getElementById('ruleSeverity').value;
+
+    try {
+      await apiFetch('/api/alerts/rules', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, query, window_minutes, threshold, severity })
       });
+      document.getElementById('ruleModal')?.classList.add('hidden');
+      document.getElementById('createRuleForm').reset();
       loadRules();
-    });
-  });
-  list.querySelectorAll('[data-del]').forEach(btn => {
-    btn.addEventListener('click', async () => {
-      if (!confirm('Delete this rule?')) return;
-       await apiFetch(`/api/alerts/rules/${btn.dataset.del}`, { method: 'DELETE' });
-      loadRules();
-    });
+    } catch (err) { alert('Failed to create rule'); }
   });
 }
 
-const ruleModal = document.getElementById('ruleModalOverlay');
-document.getElementById('newRuleBtn').addEventListener('click', () => {
-  document.getElementById('ruleName').value = '';
-  document.getElementById('ruleDescription').value = '';
-  document.getElementById('ruleQuery').value = '';
-  document.getElementById('ruleWindow').value = 5;
-  document.getElementById('ruleThreshold').value = 5;
-  document.getElementById('ruleSeverity').value = 'high';
-  ruleModal.classList.remove('hidden');
-});
-document.getElementById('ruleCancelBtn').addEventListener('click', () => ruleModal.classList.add('hidden'));
-document.getElementById('ruleSaveBtn').addEventListener('click', async () => {
-  const body = {
-    name: document.getElementById('ruleName').value.trim(),
-    description: document.getElementById('ruleDescription').value.trim(),
-    query: document.getElementById('ruleQuery').value.trim(),
-    window_minutes: Number(document.getElementById('ruleWindow').value),
-    threshold: Number(document.getElementById('ruleThreshold').value),
-    severity: document.getElementById('ruleSeverity').value
-  };
-  if (!body.name || !body.query) { alert('Name and query are required.'); return; }
-   await apiFetch('/api/alerts/rules', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-  ruleModal.classList.add('hidden');
+async function loadRules() {
+  const tbody = document.querySelector('#rulesTable tbody');
+  if (!tbody) return;
+
+  try {
+    const rules = await apiFetch('/api/alerts/rules').then(r => r.json());
+
+    tbody.innerHTML = rules.map(r => `
+      <tr>
+        <td style="font-weight: 700; color: var(--text-main);">${escapeHtml(r.name)}</td>
+        <td style="font-family: var(--font-mono); color: var(--cyber-cyan);">${escapeHtml(r.query)}</td>
+        <td style="font-family: var(--font-mono);">${r.window_minutes} min</td>
+        <td style="font-family: var(--font-mono);">${r.threshold} count</td>
+        <td><span class="log-badge ${r.severity}">${r.severity}</span></td>
+        <td>
+          <input type="checkbox" ${r.enabled ? 'checked' : ''} onchange="toggleRule(${r.id}, this.checked)">
+        </td>
+        <td style="text-align: right;">
+          <button class="btn btn-secondary" style="padding: 2px 8px; color: var(--critical-red);" onclick="deleteRule(${r.id})">Delete</button>
+        </td>
+      </tr>
+    `).join('');
+  } catch (err) {
+    tbody.innerHTML = '<tr><td colspan="7" style="color:var(--critical-red); text-align:center;">Failed to load rules</td></tr>';
+  }
+}
+
+async function toggleRule(id, enabled) {
+  await apiFetch(`/api/alerts/rules/${id}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ enabled })
+  });
+}
+window.toggleRule = toggleRule;
+
+async function deleteRule(id) {
+  if (!confirm('Are you sure you want to delete this rule?')) return;
+  await apiFetch(`/api/alerts/rules/${id}`, { method: 'DELETE' });
   loadRules();
-});
+}
+window.deleteRule = deleteRule;
 
-// ---------- Ingest ----------
-let selectedFile = null;
-const dropzone = document.getElementById('dropzone');
-const fileInput = document.getElementById('fileInput');
-
-dropzone.addEventListener('click', () => fileInput.click());
-dropzone.addEventListener('dragover', e => { e.preventDefault(); dropzone.classList.add('drag'); });
-dropzone.addEventListener('dragleave', () => dropzone.classList.remove('drag'));
-dropzone.addEventListener('drop', e => {
-  e.preventDefault();
-  dropzone.classList.remove('drag');
-  if (e.dataTransfer.files.length) setSelectedFile(e.dataTransfer.files[0]);
-});
-fileInput.addEventListener('change', () => { if (fileInput.files.length) setSelectedFile(fileInput.files[0]); });
-
-function setSelectedFile(file) {
-  selectedFile = file;
-  dropzone.querySelector('.dz-text').textContent = `Selected: ${file.name} (${(file.size / 1024).toFixed(1)} KB)`;
-  document.getElementById('uploadBtn').disabled = false;
+// ---------- Threat Intel ----------
+function initThreatIntelEvents() {
+  document.getElementById('iocSearchBtn')?.addEventListener('click', runIocLookup);
 }
 
-document.getElementById('uploadBtn').addEventListener('click', async () => {
-  if (!selectedFile) return;
-  const btn = document.getElementById('uploadBtn');
-  btn.disabled = true;
-  btn.textContent = 'Ingesting\u2026';
-  const fd = new FormData();
-  fd.append('file', selectedFile);
-  fd.append('source_type', document.getElementById('sourceTypeSelect').value);
-  const resultEl = document.getElementById('ingestResult');
+async function loadThreatIntel() {
   try {
-     const res = await apiFetch('/api/ingest/file', { method: 'POST', body: fd }).then(r => r.json());
-    if (res.error) {
-      resultEl.innerHTML = `<span class="err">${escapeHtml(res.error)}</span>`;
+    const data = await apiFetch('/api/analytics/threatintel/lookup').then(r => r.json());
+    document.getElementById('tiIpCount').textContent = (data.total_ips || 0).toLocaleString();
+    document.getElementById('tiDomainCount').textContent = (data.total_domains || 0).toLocaleString();
+  } catch (err) { console.error('Threat Intel load error:', err); }
+}
+
+async function runIocLookup() {
+  const query = document.getElementById('iocSearchInput')?.value.trim();
+  const box = document.getElementById('iocResultBox');
+  if (!query || !box) return;
+
+  box.innerHTML = 'Querying threat intelligence database...';
+
+  try {
+    const res = await apiFetch(`/api/analytics/threatintel/lookup?query=${encodeURIComponent(query)}`).then(r => r.json());
+    
+    if (res.matched) {
+      box.innerHTML = `
+        <div style="color: var(--critical-red); font-weight: 700; font-size: 14px; margin-bottom: 6px;">⚠️ MATCH FOUND: MALICIOUS ${res.type.toUpperCase()} DETECTED</div>
+        <div>Query: <code>${escapeHtml(res.query)}</code></div>
+        <div style="margin-top: 4px; color: var(--text-muted);">${res.details}</div>
+      `;
     } else {
-      resultEl.innerHTML = `<span class="ok">Ingested ${res.ingested} events from ${escapeHtml(res.filename)} as "${escapeHtml(res.source_type)}".</span>`;
-      loadIngestHistory();
+      box.innerHTML = `
+        <div style="color: var(--splunk-green); font-weight: 700; font-size: 14px; margin-bottom: 6px;">✅ NO MATCH FOUND</div>
+        <div>Query: <code>${escapeHtml(res.query)}</code></div>
+        <div style="margin-top: 4px; color: var(--text-muted);">This IOC is not currently listed in active threat blocklists.</div>
+      `;
     }
-  } catch (e) {
-    resultEl.innerHTML = `<span class="err">Upload failed: ${escapeHtml(e.message)}</span>`;
-  }
-  btn.disabled = false;
-  btn.textContent = 'Ingest file';
-});
+  } catch (err) { box.innerHTML = `<div style="color:var(--critical-red);">Lookup failed</div>`; }
+}
 
-document.getElementById('loadSampleBtn').addEventListener('click', async () => {
-  const btn = document.getElementById('loadSampleBtn');
-  const out = document.getElementById('sampleResult');
-  btn.disabled = true;
-  btn.textContent = 'Loading\u2026';
-  try {
-     const res = await apiFetch('/api/ingest/sample', { method: 'POST' }).then(r => r.json());
-    out.innerHTML = `<span class="ok">Loaded: ${res.summary.map(s => `${s.file} (${s.ingested})`).join(', ')}. Run detection rules from the Alerts tab to see them fire.</span>`;
-    loadIngestHistory();
-  } catch (e) {
-    out.innerHTML = `<span class="err">Failed: ${escapeHtml(e.message)}</span>`;
-  }
-  btn.disabled = false;
-  btn.textContent = 'Load sample data';
-});
+// ---------- Ingest Log Data ----------
+function initIngestEvents() {
+  const form = document.getElementById('ingestForm');
+  const fileInput = document.getElementById('logFileInput');
+  const selectedName = document.getElementById('selectedFileName');
 
-async function loadIngestHistory() {
-  const resp = await apiFetch('/api/ingest/history').then(r => r.json());
-  const rows = Array.isArray(resp) ? resp : (resp.entries || []);
-  const tbody = document.querySelector('#tableIngestHistory tbody');
-  tbody.innerHTML = '';
-  if (!rows.length) {
-    tbody.innerHTML = '<tr><td colspan="2" style="color:var(--text-faint);">No files ingested yet</td></tr>';
-    return;
+  if (fileInput) {
+    fileInput.addEventListener('change', () => {
+      if (fileInput.files.length > 0 && selectedName) {
+        selectedName.textContent = `Selected: ${fileInput.files[0].name}`;
+      }
+    });
   }
-  rows.forEach(r => {
-    const tr = document.createElement('tr');
-    tr.innerHTML = `<td>${escapeHtml(r.filename)} <span style="color:var(--text-faint);">(${r.source_type})</span></td><td>${r.event_count}</td>`;
-    tbody.appendChild(tr);
+
+  if (form) {
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      if (!fileInput.files.length) return alert('Please select a file to ingest');
+
+      const formData = new FormData();
+      formData.append('file', fileInput.files[0]);
+      formData.append('source_type', document.getElementById('sourceTypeSelect').value);
+
+      try {
+        const resp = await apiFetch('/api/ingest/file', { method: 'POST', body: formData }).then(r => r.json());
+        alert(`Successfully ingested ${resp.ingested} log events!`);
+        form.reset();
+        if (selectedName) selectedName.textContent = 'Supports Syslog, Nginx, Suricata, Windows Event';
+        refreshAlertBadge();
+      } catch (err) { alert('Ingest failed: ' + err.message); }
+    });
+  }
+
+  document.getElementById('loadSampleDataBtn')?.addEventListener('click', async () => {
+    const feedback = document.getElementById('ingestFeedback');
+    if (feedback) feedback.textContent = 'Loading sample log suite...';
+
+    try {
+      const resp = await apiFetch('/api/ingest/sample', { method: 'POST' }).then(r => r.json());
+      if (feedback) feedback.textContent = `✅ Successfully loaded sample logs across all 4 threat sources!`;
+      refreshAlertBadge();
+    } catch (err) {
+      if (feedback) feedback.textContent = `❌ Failed to load sample data`;
+    }
   });
 }
 
-// ---------- Utils ----------
-function escapeHtml(str) {
-  return String(str).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+function loadIngestHistory() {}
+
+// ---------- API Key Modal ----------
+function initApiKeyModal() {
+  document.getElementById('openKeyModal')?.addEventListener('click', () => {
+    document.getElementById('currentApiKeyDisplay').value = API_KEY;
+    document.getElementById('keyModal')?.classList.remove('hidden');
+  });
+  document.getElementById('closeKeyModal')?.addEventListener('click', () => {
+    document.getElementById('keyModal')?.classList.add('hidden');
+  });
+  document.getElementById('copyApiKeyBtn')?.addEventListener('click', () => {
+    navigator.clipboard.writeText(API_KEY);
+    alert('API Key copied to clipboard!');
+  });
 }
 
-// ---------- Init ----------
-loadDashboard();
-setInterval(refreshAlertBadge, 20000);
-setInterval(() => { if (currentView === 'dashboard') loadDashboard(); }, 60000);
+// ---------- Helper ----------
+function escapeHtml(str) {
+  if (typeof str !== 'string') return '';
+  return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}

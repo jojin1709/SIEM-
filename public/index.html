@@ -1,271 +1,437 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
+  <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="api-key" content="__API_KEY__">
-  <title>SIEM++ &mdash; Full Stack SIEM</title>
-<link rel="stylesheet" href="/css/style.css">
+  <title>SIEM++ &mdash; Enterprise SOC & Threat Detection Platform</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/style.css">
+  <script src="/js/vendor/chart.umd.js"></script>
 </head>
 <body>
 
-<div class="shell">
-  <aside class="sidebar">
-    <div class="brand">
-      <div class="brand-mark">S</div>
-      <div class="brand-text">
-        <div class="brand-name">SIEM++</div>
-        <div class="brand-sub">Full Stack SIEM</div>
+  <!-- Top Navigation Header -->
+  <header class="topbar">
+    <div class="topbar-brand">
+      <div class="brand-badge">S+</div>
+      <div>
+        <div class="brand-title">SIEM++ SOC</div>
+        <div class="brand-sub">Security Information & Threat Platform</div>
       </div>
     </div>
 
-    <nav class="nav">
+    <div class="topbar-meta">
+      <div class="status-pill">
+        <span class="status-dot"></span>
+        <span>ENGINE ONLINE</span>
+      </div>
+      <div class="clock-display" id="utcClock">UTC 00:00:00</div>
+      <button class="btn btn-secondary" id="openKeyModal" style="font-size: 11px; padding: 4px 10px;">🔑 API Key</button>
+    </div>
+  </header>
+
+  <!-- App Main Shell -->
+  <div class="app-shell">
+    
+    <!-- Navigation Sidebar -->
+    <aside class="sidebar">
       <button class="nav-item active" data-view="dashboard">
-        <span class="nav-dot"></span> Overview
+        <span class="nav-icon">📊</span> Overview
       </button>
       <button class="nav-item" data-view="search">
-        <span class="nav-dot"></span> Search
+        <span class="nav-icon">🔍</span> Search & Logs
       </button>
       <button class="nav-item" data-view="alerts">
-        <span class="nav-dot"></span> Alerts <span class="badge" id="alertBadge">0</span>
+        <span class="nav-icon">🚨</span> Alerts
+        <span class="nav-badge" id="alertBadge">0</span>
       </button>
       <button class="nav-item" data-view="rules">
-        <span class="nav-dot"></span> Detection Rules
+        <span class="nav-icon">🛡️</span> Detection Rules
+      </button>
+      <button class="nav-item" data-view="threatintel">
+        <span class="nav-icon">⚡</span> Threat Intel
       </button>
       <button class="nav-item" data-view="ingest">
-        <span class="nav-dot"></span> Ingest Data
+        <span class="nav-icon">📥</span> Ingest Data
       </button>
-    </nav>
+    </aside>
 
-    <div class="sidebar-foot">
-    </div>
-  </aside>
+    <!-- Main Content Area -->
+    <main class="main">
+      <div class="view-container">
 
-  <main class="main">
+        <!-- OVERVIEW / DASHBOARD VIEW -->
+        <section class="view" id="view-dashboard">
+          <div class="view-header">
+            <div>
+              <h1>Security Overview</h1>
+              <div class="sub">Real-time log ingestion metrics, threat distribution, and open alert triage.</div>
+            </div>
+            <button class="btn btn-secondary" id="refreshDash">↻ Refresh Data</button>
+          </div>
 
-    <!-- OVERVIEW -->
-    <section class="view" id="view-dashboard">
-      <header class="view-head">
-        <div>
-          <h1>Overview</h1>
-          <p class="sub">Ingested events, detection coverage, and open alerts at a glance.</p>
-        </div>
-        <button class="btn ghost" id="refreshDash">Refresh</button>
-      </header>
+          <!-- Event Volume Pulse Track -->
+          <div class="pulse-card">
+            <div class="pulse-header">
+              <div class="pulse-title">EVENT INGESTION PULSE (LAST 48 HOURS)</div>
+              <div style="font-size: 11px; color: var(--text-faint);" id="pulseCountLabel">-- events</div>
+            </div>
+            <div class="pulse-track" id="pulseTrack"></div>
+          </div>
 
-      <div class="pulse-strip" id="pulseStrip">
-        <div class="pulse-label">EVENT PULSE</div>
-        <div class="pulse-track" id="pulseTrack"></div>
+          <!-- Top Stats Cards -->
+          <div class="stats-grid">
+            <div class="stat-card good">
+              <div class="stat-value" id="statTotalEvents">&mdash;</div>
+              <div class="stat-label">Total Logs Ingested</div>
+            </div>
+            <div class="stat-card critical">
+              <div class="stat-value" id="statOpenAlerts">&mdash;</div>
+              <div class="stat-label">Open Alerts</div>
+            </div>
+            <div class="stat-card warn">
+              <div class="stat-value" id="statSources">&mdash;</div>
+              <div class="stat-label">Active Log Sources</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-value" id="statRules">&mdash;</div>
+              <div class="stat-label">Enabled Detection Rules</div>
+            </div>
+          </div>
+
+          <!-- Charts Row -->
+          <div class="grid-2">
+            <div class="panel">
+              <div class="panel-title">Events by Log Source</div>
+              <canvas id="chartSource" height="200"></canvas>
+            </div>
+            <div class="panel">
+              <div class="panel-title">Severity Distribution</div>
+              <canvas id="chartSeverity" height="200"></canvas>
+            </div>
+          </div>
+
+          <!-- Top Attackers & Hosts -->
+          <div class="grid-2">
+            <div class="panel">
+              <div class="panel-title">Top Source IP Addresses</div>
+              <table class="data-table" id="tableTopIps">
+                <thead>
+                  <tr><th>IP Address</th><th style="text-align: right;">Events</th></tr>
+                </thead>
+                <tbody></tbody>
+              </table>
+            </div>
+            <div class="panel">
+              <div class="panel-title">Top Hosts</div>
+              <table class="data-table" id="tableTopHosts">
+                <thead>
+                  <tr><th>Host Name</th><th style="text-align: right;">Events</th></tr>
+                </thead>
+                <tbody></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+
+        <!-- SPLUNK-STYLE SEARCH & LOGS VIEW -->
+        <section class="view hidden" id="view-search">
+          <div class="view-header">
+            <div>
+              <h1>Splunk-Style Log Search</h1>
+              <div class="sub">Filter logs using field syntax (e.g. <code>source_type:nginx severity:high</code> or free text).</div>
+            </div>
+            <div style="display: flex; gap: 10px;">
+              <button class="btn btn-secondary" id="exportCsvBtn">📥 Export CSV</button>
+              <button class="btn btn-secondary" id="exportJsonBtn">📥 Export JSON</button>
+            </div>
+          </div>
+
+          <div class="splunk-search-shell">
+            <!-- Left Field Picker Drawer -->
+            <aside class="fields-sidebar">
+              <div class="fields-title">SELECTED FIELDS</div>
+              <div id="fieldsList">
+                <div class="field-item" data-field="source_type"><span>source_type</span> <span class="field-count" id="fc-source_type">0</span></div>
+                <div class="field-item" data-field="severity"><span>severity</span> <span class="field-count" id="fc-severity">0</span></div>
+                <div class="field-item" data-field="src_ip"><span>src_ip</span> <span class="field-count" id="fc-src_ip">0</span></div>
+                <div class="field-item" data-field="user"><span>user</span> <span class="field-count" id="fc-user">0</span></div>
+                <div class="field-item" data-field="host"><span>host</span> <span class="field-count" id="fc-host">0</span></div>
+              </div>
+            </aside>
+
+            <!-- Main Search Controls & Results -->
+            <div>
+              <div class="search-controls">
+                <div class="search-input-group">
+                  <input type="text" class="splunk-input" id="searchQuery" placeholder="e.g. source_type:suricata severity:high OR 'failed password'">
+                  <button class="btn btn-primary" id="doSearch">🔍 Search</button>
+                </div>
+
+                <div class="time-presets">
+                  <span style="font-size: 11px; color: var(--text-faint); align-self: center; font-weight: 700; margin-right: 6px;">TIME RANGE:</span>
+                  <button class="preset-btn active" data-range="all">All Time</button>
+                  <button class="preset-btn" data-range="15m">Last 15m</button>
+                  <button class="preset-btn" data-range="1h">Last 1h</button>
+                  <button class="preset-btn" data-range="24h">Last 24h</button>
+                </div>
+              </div>
+
+              <!-- Search Results Container -->
+              <div class="panel" style="padding: 0; overflow: hidden;">
+                <div style="padding: 12px 16px; background: var(--bg-shell); border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center;">
+                  <div style="font-weight: 600; font-size: 12px; color: var(--text-muted);" id="searchResultsCount">0 events matched</div>
+                  <div style="display: flex; gap: 8px;">
+                    <button class="btn btn-secondary" id="prevPage" style="padding: 4px 10px;">‹ Prev</button>
+                    <button class="btn btn-secondary" id="nextPage" style="padding: 4px 10px;">Next ›</button>
+                  </div>
+                </div>
+
+                <div id="searchResults">
+                  <div style="padding: 30px; text-align: center; color: var(--text-faint);">Loading logs...</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+
+        <!-- ALERTS VIEW -->
+        <section class="view hidden" id="view-alerts">
+          <div class="view-header">
+            <div>
+              <h1>Security Alerts & Triage</h1>
+              <div class="sub">Active threat alerts triggered by automated detection rules.</div>
+            </div>
+            <button class="btn btn-primary" id="runRulesBtn">⚡ Evaluate Rules Now</button>
+          </div>
+
+          <div style="display: flex; gap: 10px; margin-bottom: 20px;">
+            <button class="preset-btn active" data-status="">All Alerts</button>
+            <button class="preset-btn" data-status="open">Open</button>
+            <button class="preset-btn" data-status="acknowledged">Acknowledged</button>
+            <button class="preset-btn" data-status="closed">Closed</button>
+          </div>
+
+          <div class="panel" style="padding: 0; overflow: hidden;">
+            <table class="data-table" id="alertsTable">
+              <thead>
+                <tr>
+                  <th>Rule / Threat Title</th>
+                  <th>Severity</th>
+                  <th>Matched Events</th>
+                  <th>Triggered Time</th>
+                  <th>Status</th>
+                  <th style="text-align: right;">Actions</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </section>
+
+
+        <!-- DETECTION RULES VIEW -->
+        <section class="view hidden" id="view-rules">
+          <div class="view-header">
+            <div>
+              <h1>Detection Rules</h1>
+              <div class="sub">Configure automated correlation rules and threshold alerts.</div>
+            </div>
+            <button class="btn btn-primary" id="openNewRuleModal">+ Create Rule</button>
+          </div>
+
+          <div class="panel" style="padding: 0; overflow: hidden;">
+            <table class="data-table" id="rulesTable">
+              <thead>
+                <tr>
+                  <th>Rule Name</th>
+                  <th>Query Pattern</th>
+                  <th>Window</th>
+                  <th>Threshold</th>
+                  <th>Severity</th>
+                  <th>Enabled</th>
+                  <th style="text-align: right;">Actions</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </section>
+
+
+        <!-- THREAT INTEL & ANALYTICS VIEW -->
+        <section class="view hidden" id="view-threatintel">
+          <div class="view-header">
+            <div>
+              <h1>Threat Intelligence & IOC Lookup</h1>
+              <div class="sub">Query IP addresses and domains against active threat intelligence blocklists.</div>
+            </div>
+          </div>
+
+          <div class="grid-2">
+            <div class="panel">
+              <div class="panel-title">IOC Quick Lookup</div>
+              <div style="display: flex; gap: 10px; margin-bottom: 16px;">
+                <input type="text" class="splunk-input" id="iocSearchInput" placeholder="Enter IP address (e.g. 198.51.100.42) or domain">
+                <button class="btn btn-primary" id="iocSearchBtn">Check IOC</button>
+              </div>
+              <div id="iocResultBox" style="background: var(--bg-dark); padding: 16px; border-radius: var(--radius-sm); border: 1px solid var(--border); font-family: var(--font-mono); font-size: 12px; color: var(--text-muted);">
+                Enter an IP address or domain above to check against threat feeds.
+              </div>
+            </div>
+
+            <div class="panel">
+              <div class="panel-title">Active Threat Intelligence Feeds</div>
+              <div style="display: flex; flex-direction: column; gap: 12px;">
+                <div style="background: var(--bg-dark); padding: 14px; border-radius: var(--radius-sm); border: 1px solid var(--border); display: flex; justify-content: space-between;">
+                  <div>
+                    <div style="font-weight: 700; color: var(--text-main);">Known Malicious IPs</div>
+                    <div style="font-size: 11px; color: var(--text-faint);">Updated every 60 seconds</div>
+                  </div>
+                  <div style="font-family: var(--font-mono); font-weight: 700; color: var(--splunk-green);" id="tiIpCount">--</div>
+                </div>
+
+                <div style="background: var(--bg-dark); padding: 14px; border-radius: var(--radius-sm); border: 1px solid var(--border); display: flex; justify-content: space-between;">
+                  <div>
+                    <div style="font-weight: 700; color: var(--text-main);">Malicious Domains</div>
+                    <div style="font-size: 11px; color: var(--text-faint);">Updated every 60 seconds</div>
+                  </div>
+                  <div style="font-family: var(--font-mono); font-weight: 700; color: var(--splunk-green);" id="tiDomainCount">--</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+
+        <!-- INGEST DATA VIEW -->
+        <section class="view hidden" id="view-ingest">
+          <div class="view-header">
+            <div>
+              <h1>Ingest Log Data</h1>
+              <div class="sub">Upload custom log files or ingest sample logs for instant testing.</div>
+            </div>
+          </div>
+
+          <div class="grid-2">
+            <div class="panel">
+              <div class="panel-title">Upload Log File</div>
+              <form id="ingestForm">
+                <div style="border: 2px dashed var(--border-glow); padding: 40px; text-align: center; border-radius: var(--radius-md); margin-bottom: 16px; background: rgba(7,9,19,0.3);">
+                  <div style="font-size: 28px; margin-bottom: 10px;">📥</div>
+                  <input type="file" id="logFileInput" style="display: none;">
+                  <button type="button" class="btn btn-secondary" onclick="document.getElementById('logFileInput').click()">Browse Log File</button>
+                  <div style="font-size: 11.5px; color: var(--text-faint); margin-top: 10px;" id="selectedFileName">Supports Syslog, Nginx, Suricata, Windows Event XML/JSON</div>
+                </div>
+
+                <div style="display: flex; gap: 10px; align-items: center;">
+                  <select id="sourceTypeSelect" class="splunk-input" style="flex: 1;">
+                    <option value="auto">Auto-detect format</option>
+                    <option value="nginx">Nginx / Apache</option>
+                    <option value="syslog">Syslog (RFC 3164/5424)</option>
+                    <option value="suricata">Suricata EVE JSON</option>
+                    <option value="winevent">Windows Event Log</option>
+                    <option value="json">Generic JSON</option>
+                  </select>
+                  <button type="submit" class="btn btn-primary">Ingest File</button>
+                </div>
+              </form>
+            </div>
+
+            <div class="panel">
+              <div class="panel-title">Quick Demo Sample Ingestion</div>
+              <p style="color: var(--text-muted); font-size: 12.5px; margin-bottom: 20px;">
+                Pre-load standard attack scenarios (Brute Force SSH, HTTP 5xx Spikes, Suricata IDS Alert, Windows Account Lockouts).
+              </p>
+              <button class="btn btn-primary" id="loadSampleDataBtn" style="width: 100%; justify-content: center; padding: 12px;">🚀 Load Sample Log Suite</button>
+              <div id="ingestFeedback" style="margin-top: 14px; font-family: var(--font-mono); font-size: 11.5px; color: var(--splunk-green);"></div>
+            </div>
+          </div>
+        </section>
+
       </div>
+    </main>
+  </div>
 
-      <div class="stat-row">
-        <div class="stat-card">
-          <div class="stat-value" id="statTotalEvents">&mdash;</div>
-          <div class="stat-label">Total events</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-value" id="statOpenAlerts">&mdash;</div>
-          <div class="stat-label">Open alerts</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-value" id="statSources">&mdash;</div>
-          <div class="stat-label">Source types</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-value" id="statRules">&mdash;</div>
-          <div class="stat-label">Active rules</div>
-        </div>
+  <!-- Alert Triage Detail Modal -->
+  <div class="modal-overlay hidden" id="alertModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <div style="font-weight: 700; font-size: 15px;" id="modalAlertTitle">Alert Details</div>
+        <button class="btn btn-secondary" style="padding: 2px 8px;" id="closeAlertModal">✕</button>
       </div>
-
-      <div class="grid-2">
-        <div class="panel">
-          <h3>Events by source</h3>
-          <canvas id="chartSource" height="220"></canvas>
-        </div>
-        <div class="panel">
-          <h3>Severity breakdown</h3>
-          <canvas id="chartSeverity" height="220"></canvas>
-        </div>
+      <div class="modal-body" id="modalAlertBody">
+        <div style="color: var(--text-muted);">Loading alert sample logs...</div>
       </div>
-
-      <div class="grid-2">
-        <div class="panel">
-          <h3>Top source IPs</h3>
-          <table class="mini-table" id="tableTopIps"><tbody></tbody></table>
-        </div>
-        <div class="panel">
-          <h3>Top hosts</h3>
-          <table class="mini-table" id="tableTopHosts"><tbody></tbody></table>
-        </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" id="ackAlertBtn">Mark Acknowledged</button>
+        <button class="btn btn-primary" id="closeAlertStatusBtn">Close Alert</button>
       </div>
-    </section>
-
-    <!-- SEARCH -->
-    <section class="view hidden" id="view-search">
-      <header class="view-head">
-        <div>
-          <h1>Search</h1>
-          <p class="sub">field:value tokens, "quoted phrases", wildcards (*), and -negation. Space = AND.</p>
-        </div>
-      </header>
-
-      <div class="search-bar">
-        <input type="text" id="searchInput" placeholder='e.g.  source_type:suricata severity:high  or  "failed password"  or  src_ip:192.168.*' />
-        <select id="searchSourceType">
-          <option value="">All sources</option>
-          <option value="syslog">syslog</option>
-          <option value="nginx">nginx</option>
-          <option value="suricata">suricata</option>
-          <option value="winevent">winevent</option>
-          <option value="json">json</option>
-          <option value="raw">raw</option>
-        </select>
-        <select id="searchSeverity">
-          <option value="">All severities</option>
-          <option value="critical">critical</option>
-          <option value="high">high</option>
-          <option value="medium">medium</option>
-          <option value="low">low</option>
-          <option value="info">info</option>
-        </select>
-        <button class="btn primary" id="runSearch">Search</button>
-      </div>
-
-      <div class="search-meta" id="searchMeta"></div>
-
-      <div class="event-table-wrap">
-        <table class="event-table">
-          <thead>
-            <tr>
-              <th>Time</th><th>Source</th><th>Severity</th><th>Host</th><th>Src IP</th><th>Message</th>
-            </tr>
-          </thead>
-          <tbody id="eventTableBody"></tbody>
-        </table>
-      </div>
-      <div class="pager">
-        <button class="btn ghost" id="prevPage">&larr; Prev</button>
-        <span id="pageInfo"></span>
-        <button class="btn ghost" id="nextPage">Next &rarr;</button>
-        <button class="btn ghost" id="exportJsonBtn">Export JSON</button>
-        <button class="btn ghost" id="exportCsvBtn">Export CSV</button>
-      </div>
-    </section>
-
-    <!-- ALERTS -->
-    <section class="view hidden" id="view-alerts">
-      <header class="view-head">
-        <div>
-          <h1>Alerts</h1>
-          <p class="sub">Fired by detection rules. Acknowledge or close as you triage.</p>
-        </div>
-        <button class="btn primary" id="runRulesBtn">Run rules now</button>
-      </header>
-      <div class="filter-row">
-        <button class="chip active" data-status="">All</button>
-        <button class="chip" data-status="open">Open</button>
-        <button class="chip" data-status="acknowledged">Acknowledged</button>
-        <button class="chip" data-status="closed">Closed</button>
-      </div>
-      <div class="alert-list" id="alertList"></div>
-    </section>
-
-    <!-- RULES -->
-    <section class="view hidden" id="view-rules">
-      <header class="view-head">
-        <div>
-          <h1>Detection Rules</h1>
-          <p class="sub">Each rule is a saved search evaluated on a rolling window. Threshold met &rarr; alert fires.</p>
-        </div>
-        <button class="btn primary" id="newRuleBtn">+ New rule</button>
-      </header>
-      <div class="rule-list" id="ruleList"></div>
-    </section>
-
-    <!-- INGEST -->
-    <section class="view hidden" id="view-ingest">
-      <header class="view-head">
-        <div>
-          <h1>Ingest Data</h1>
-          <p class="sub">Upload a log file. Format is auto-detected, or pick one explicitly.</p>
-        </div>
-      </header>
-
-      <div class="panel">
-        <div class="dropzone" id="dropzone">
-          <div class="dz-icon">&uarr;</div>
-          <div class="dz-text">Drop a log file here, or click to browse</div>
-          <div class="dz-sub">syslog &middot; nginx/apache combined &middot; Suricata eve.json &middot; Windows event JSON &middot; generic JSON-lines &middot; plain text</div>
-          <input type="file" id="fileInput" hidden>
-        </div>
-        <div class="ingest-controls">
-          <label for="sourceTypeSelect">Format</label>
-          <select id="sourceTypeSelect">
-            <option value="auto">Auto-detect</option>
-            <option value="syslog">syslog</option>
-            <option value="nginx">nginx / apache</option>
-            <option value="suricata">Suricata eve.json</option>
-            <option value="winevent">Windows event (JSON)</option>
-            <option value="json">Generic JSON-lines</option>
-            <option value="raw">Plain text</option>
-          </select>
-          <button class="btn primary" id="uploadBtn" disabled>Ingest file</button>
-        </div>
-        <div id="ingestResult"></div>
-      </div>
-
-      <div class="panel">
-        <h3>Recent ingests</h3>
-        <table class="mini-table" id="tableIngestHistory"><tbody></tbody></table>
-      </div>
-
-      <div class="panel">
-        <h3>Try it with sample data</h3>
-        <p class="hint">Ships with sample logs under <code>sample-logs/</code> &mdash; syslog auth failures, an nginx access log with a 5xx spike, a Suricata eve.json with a high-severity alert, and a Windows event export. Loading them here time-shifts the events to "just now" so the dashboard and detection rules light up immediately.</p>
-        <button class="btn primary" id="loadSampleBtn">Load sample data</button>
-        <div id="sampleResult" style="margin-top:10px;font-size:12.5px;"></div>
-      </div>
-    </section>
-
-  </main>
-</div>
-
-<div class="modal-overlay hidden" id="ruleModalOverlay">
-  <div class="modal">
-    <h3 id="ruleModalTitle">New detection rule</h3>
-    <label>Name</label>
-    <input type="text" id="ruleName" placeholder="e.g. SSH brute force attempts">
-    <label>Description</label>
-    <input type="text" id="ruleDescription" placeholder="What this rule catches and why">
-    <label>Query (same syntax as Search)</label>
-    <input type="text" id="ruleQuery" placeholder='e.g. source_type:syslog fail'>
-    <div class="modal-row">
-      <div>
-        <label>Window (minutes)</label>
-        <input type="number" id="ruleWindow" value="5" min="1">
-      </div>
-      <div>
-        <label>Threshold (event count)</label>
-        <input type="number" id="ruleThreshold" value="5" min="1">
-      </div>
-      <div>
-        <label>Severity</label>
-        <select id="ruleSeverity">
-          <option value="critical">critical</option>
-          <option value="high" selected>high</option>
-          <option value="medium">medium</option>
-          <option value="low">low</option>
-        </select>
-      </div>
-    </div>
-    <div class="modal-actions">
-      <button class="btn ghost" id="ruleCancelBtn">Cancel</button>
-      <button class="btn primary" id="ruleSaveBtn">Save rule</button>
     </div>
   </div>
-</div>
 
-<script src="/js/vendor/chart.umd.js"></script>
-<script src="/js/app.js"></script>
+  <!-- Create Rule Modal -->
+  <div class="modal-overlay hidden" id="ruleModal">
+    <div class="modal-content" style="max-width: 550px;">
+      <div class="modal-header">
+        <div style="font-weight: 700; font-size: 15px;">Create New Detection Rule</div>
+        <button class="btn btn-secondary" style="padding: 2px 8px;" id="closeRuleModal">✕</button>
+      </div>
+      <div class="modal-body">
+        <form id="createRuleForm" style="display: flex; flex-direction: column; gap: 14px;">
+          <div>
+            <label style="font-size: 11px; font-weight: 700; color: var(--text-faint); display: block; margin-bottom: 4px;">RULE NAME</label>
+            <input type="text" class="splunk-input" id="ruleName" required placeholder="e.g. High Volume Failed SSH Logins">
+          </div>
+          <div>
+            <label style="font-size: 11px; font-weight: 700; color: var(--text-faint); display: block; margin-bottom: 4px;">SEARCH QUERY PATTERN</label>
+            <input type="text" class="splunk-input" id="ruleQuery" required placeholder="e.g. source_type:syslog failed">
+          </div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+            <div>
+              <label style="font-size: 11px; font-weight: 700; color: var(--text-faint); display: block; margin-bottom: 4px;">WINDOW (MINUTES)</label>
+              <input type="number" class="splunk-input" id="ruleWindow" value="5" min="1" max="1440" required>
+            </div>
+            <div>
+              <label style="font-size: 11px; font-weight: 700; color: var(--text-faint); display: block; margin-bottom: 4px;">MATCH THRESHOLD</label>
+              <input type="number" class="splunk-input" id="ruleThreshold" value="5" min="1" required>
+            </div>
+          </div>
+          <div>
+            <label style="font-size: 11px; font-weight: 700; color: var(--text-faint); display: block; margin-bottom: 4px;">SEVERITY LEVEL</label>
+            <select class="splunk-input" id="ruleSeverity">
+              <option value="high">High</option>
+              <option value="critical">Critical</option>
+              <option value="medium">Medium</option>
+              <option value="low">Low</option>
+            </select>
+          </div>
+          <button type="submit" class="btn btn-primary" style="margin-top: 10px; justify-content: center;">Save & Enable Rule</button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- API Key Modal -->
+  <div class="modal-overlay hidden" id="keyModal">
+    <div class="modal-content" style="max-width: 450px;">
+      <div class="modal-header">
+        <div style="font-weight: 700; font-size: 15px;">API Security Credentials</div>
+        <button class="btn btn-secondary" style="padding: 2px 8px;" id="closeKeyModal">✕</button>
+      </div>
+      <div class="modal-body">
+        <div style="margin-bottom: 12px; font-size: 12px; color: var(--text-muted);">Current API key passed in HTTP header <code>X-API-Key</code>:</div>
+        <input type="text" class="splunk-input" id="currentApiKeyDisplay" readonly style="width: 100%; margin-bottom: 16px;">
+        <button class="btn btn-secondary" id="copyApiKeyBtn" style="width: 100%; justify-content: center;">📋 Copy Key to Clipboard</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/app.js"></script>
 </body>
 </html>

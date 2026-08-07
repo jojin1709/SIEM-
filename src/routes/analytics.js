@@ -106,4 +106,30 @@ router.get('/timechart', (req, res) => {
   }
 });
 
+router.get('/threatintel/lookup', (req, res) => {
+  const { query } = req.query;
+  const { ipSet, domainSet, reloadIfNeeded } = require('../threatintel');
+  reloadIfNeeded();
+
+  if (!query) {
+    return res.json({
+      total_ips: ipSet.size,
+      total_domains: domainSet.size,
+      sample_ips: Array.from(ipSet).slice(0, 10),
+      sample_domains: Array.from(domainSet).slice(0, 10)
+    });
+  }
+
+  const clean = query.trim();
+  const isIpMatch = ipSet.has(clean);
+  const isDomainMatch = domainSet.has(clean.replace(/^\*\.?/, ''));
+
+  res.json({
+    query: clean,
+    matched: isIpMatch || isDomainMatch,
+    type: isIpMatch ? 'ip' : (isDomainMatch ? 'domain' : null),
+    details: (isIpMatch || isDomainMatch) ? 'Match found in active threat intelligence blocklist' : 'No threat match found'
+  });
+});
+
 module.exports = router;
