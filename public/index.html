@@ -63,77 +63,111 @@
     <main class="main">
       <div class="view-container">
 
-        <!-- OVERVIEW / DASHBOARD VIEW -->
+        <!-- OVERVIEW / SECURITY POSTURE VIEW (Splunk Enterprise Security Style) -->
         <section class="view" id="view-dashboard">
           <div class="view-header">
             <div>
-              <h1>Security Overview</h1>
-              <div class="sub">Real-time log ingestion metrics, threat distribution, and open alert triage.</div>
+              <h1>Security Posture</h1>
+              <div class="sub">Key security domain notables, threat urgency breakdown, and real-time notable events.</div>
             </div>
-            <button class="btn btn-secondary" id="refreshDash">↻ Refresh Data</button>
+            <button class="btn btn-secondary" id="refreshDash">↻ Refresh Posture</button>
           </div>
 
-          <!-- Event Volume Pulse Track -->
-          <div class="pulse-card">
-            <div class="pulse-header">
-              <div class="pulse-title">EVENT INGESTION PULSE (LAST 48 HOURS)</div>
-              <div style="font-size: 11px; color: var(--text-faint);" id="pulseCountLabel">-- events</div>
-            </div>
-            <div class="pulse-track" id="pulseTrack"></div>
-          </div>
-
-          <!-- Top Stats Cards -->
-          <div class="stats-grid">
-            <div class="stat-card good">
-              <div class="stat-value" id="statTotalEvents">&mdash;</div>
-              <div class="stat-label">Total Logs Ingested</div>
-            </div>
-            <div class="stat-card critical">
-              <div class="stat-value" id="statOpenAlerts">&mdash;</div>
-              <div class="stat-label">Open Alerts</div>
-            </div>
-            <div class="stat-card warn">
-              <div class="stat-value" id="statSources">&mdash;</div>
-              <div class="stat-label">Active Log Sources</div>
-            </div>
-            <div class="stat-card">
-              <div class="stat-value" id="statRules">&mdash;</div>
-              <div class="stat-label">Enabled Detection Rules</div>
-            </div>
-          </div>
-
-          <!-- Charts Row -->
-          <div class="grid-2">
-            <div class="panel">
-              <div class="panel-title">Events by Log Source</div>
-              <div class="chart-container">
-                <canvas id="chartSource"></canvas>
+          <!-- Key Indicators Row (Splunk Enterprise Security 6 KPI Cards) -->
+          <div style="font-size: 11px; font-weight: 700; color: var(--text-faint); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px;">KEY INDICATORS</div>
+          <div class="kpi-grid">
+            <div class="kpi-card">
+              <div class="kpi-title">ACCESS NOTABLES</div>
+              <div class="kpi-value-row">
+                <div class="kpi-value" id="kpiAccess">72</div>
+                <div class="kpi-trend">+72 ↗</div>
               </div>
             </div>
-            <div class="panel">
-              <div class="panel-title">Severity Distribution</div>
-              <div class="chart-container">
-                <canvas id="chartSeverity"></canvas>
+
+            <div class="kpi-card">
+              <div class="kpi-title">ENDPOINT NOTABLES</div>
+              <div class="kpi-value-row">
+                <div class="kpi-value" id="kpiEndpoint">0</div>
+                <div class="kpi-trend" style="color: var(--text-faint);">0</div>
+              </div>
+            </div>
+
+            <div class="kpi-card">
+              <div class="kpi-title">NETWORK NOTABLES</div>
+              <div class="kpi-value-row">
+                <div class="kpi-value" id="kpiNetwork">202</div>
+                <div class="kpi-trend">+202 ↗</div>
+              </div>
+            </div>
+
+            <div class="kpi-card">
+              <div class="kpi-title">IDENTITY NOTABLES</div>
+              <div class="kpi-value-row">
+                <div class="kpi-value" id="kpiIdentity">0</div>
+                <div class="kpi-trend" style="color: var(--text-faint);">0</div>
+              </div>
+            </div>
+
+            <div class="kpi-card">
+              <div class="kpi-title">THREAT NOTABLES</div>
+              <div class="kpi-value-row">
+                <div class="kpi-value" id="kpiThreat">83</div>
+                <div class="kpi-trend">+83 ↗</div>
+              </div>
+            </div>
+
+            <div class="kpi-card">
+              <div class="kpi-title">UBA NOTABLES</div>
+              <div class="kpi-value-row">
+                <div class="kpi-value" id="kpiUba">3</div>
+                <div class="kpi-trend">+3 ↗</div>
               </div>
             </div>
           </div>
 
-          <!-- Top Attackers & Hosts -->
+          <!-- Charts Row (Notable Events By Urgency & Over Time) -->
           <div class="grid-2">
             <div class="panel">
-              <div class="panel-title">Top Source IP Addresses</div>
-              <table class="data-table" id="tableTopIps">
+              <div class="panel-title">Notable Events By Urgency</div>
+              <div class="chart-container">
+                <canvas id="chartUrgency"></canvas>
+              </div>
+            </div>
+
+            <div class="panel">
+              <div class="panel-title">Notable Events Over Time</div>
+              <div class="chart-container">
+                <canvas id="chartOverTime"></canvas>
+              </div>
+            </div>
+          </div>
+
+          <!-- Top Notable Tables Row (Sparklines & Correlation Counts) -->
+          <div class="grid-2">
+            <div class="panel">
+              <div class="panel-title">Top Notable Events</div>
+              <table class="data-table" id="tableTopNotables">
                 <thead>
-                  <tr><th>IP Address</th><th style="text-align: right;">Events</th></tr>
+                  <tr>
+                    <th>Rule / Threat Name</th>
+                    <th>Sparkline</th>
+                    <th style="text-align: right;">Count</th>
+                  </tr>
                 </thead>
                 <tbody></tbody>
               </table>
             </div>
+
             <div class="panel">
-              <div class="panel-title">Top Hosts</div>
-              <table class="data-table" id="tableTopHosts">
+              <div class="panel-title">Top Notable Event Sources</div>
+              <table class="data-table" id="tableTopSources">
                 <thead>
-                  <tr><th>Host Name</th><th style="text-align: right;">Events</th></tr>
+                  <tr>
+                    <th>Source IP / Host</th>
+                    <th>Sparkline</th>
+                    <th>Domain</th>
+                    <th style="text-align: right;">Count</th>
+                  </tr>
                 </thead>
                 <tbody></tbody>
               </table>

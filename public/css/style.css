@@ -237,49 +237,58 @@ html, body {
   margin-top: 2px;
 }
 
-/* ---------- Stat Cards Grid ---------- */
-.stats-grid {
+/* ---------- Splunk Enterprise Security KPI Cards Grid ---------- */
+.kpi-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 16px;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 12px;
   margin-bottom: 24px;
 }
 
-.stat-card {
+.kpi-card {
   background: var(--panel);
   border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  padding: 18px 20px;
+  border-radius: var(--radius-sm);
+  padding: 14px 16px;
   position: relative;
-  overflow: hidden;
-  transition: transform 0.15s ease, border-color 0.15s ease;
 }
 
-.stat-card:hover {
-  border-color: var(--border-glow);
-  transform: translateY(-2px);
+.kpi-title {
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--text-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 6px;
 }
 
-.stat-card::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 3px;
-  background: var(--cyber-cyan);
+.kpi-value-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
 }
 
-.stat-card.critical::before { background: var(--critical-red); }
-.stat-card.warn::before { background: var(--warn-orange); }
-.stat-card.good::before { background: var(--splunk-green); }
-
-.stat-value {
+.kpi-value {
   font-family: var(--font-mono);
-  font-size: 28px;
+  font-size: 32px;
   font-weight: 800;
-  letter-spacing: -1px;
   color: var(--text-main);
+  line-height: 1;
+}
+
+.kpi-trend {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--critical-red);
+}
+
+.sparkline-svg {
+  width: 100px;
+  height: 24px;
+  stroke: var(--splunk-green);
+  stroke-width: 1.5;
+  fill: none;
 }
 
 .stat-label {
