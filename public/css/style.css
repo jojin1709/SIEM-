@@ -365,6 +365,13 @@ html, body {
   justify-content: space-between;
 }
 
+.chart-container {
+  position: relative;
+  height: 220px;
+  width: 100%;
+  max-height: 250px;
+}
+
 /* ---------- Tables ---------- */
 .data-table {
   width: 100%;
