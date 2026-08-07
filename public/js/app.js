@@ -909,8 +909,9 @@ function initAttackMap() {
   if (!canvas) return;
   const ctx = canvas.getContext('2d');
   
-  canvas.width = canvas.parentElement.clientWidth || 800;
-  canvas.height = canvas.parentElement.clientHeight || 260;
+  const container = canvas.parentElement;
+  canvas.width = container.offsetWidth || 1100;
+  canvas.height = 260;
 
   const width = canvas.width;
   const height = canvas.height;
