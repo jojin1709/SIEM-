@@ -894,11 +894,96 @@ function initThreatIntelEvents() {
 }
 
 async function loadThreatIntel() {
+  initAttackMap();
   try {
-    const data = await apiFetch('/api/analytics/threatintel/lookup').then(r => r.json());
-    document.getElementById('tiIpCount').textContent = (data.total_ips || 0).toLocaleString();
-    document.getElementById('tiDomainCount').textContent = (data.total_domains || 0).toLocaleString();
+    const feeds = await apiFetch('/api/analytics/threatintel').then(r => r.json());
+    document.getElementById('tiIpCount').textContent = (feeds.ipBlocklist || []).length;
+    document.getElementById('tiDomainCount').textContent = (feeds.domainBlocklist || []).length;
   } catch (err) { console.error('Threat Intel load error:', err); }
+}
+
+let attackMapAnimId = null;
+
+function initAttackMap() {
+  const canvas = document.getElementById('attackMapCanvas');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  
+  canvas.width = canvas.parentElement.clientWidth || 800;
+  canvas.height = canvas.parentElement.clientHeight || 260;
+
+  const width = canvas.width;
+  const height = canvas.height;
+
+  const targets = [
+    { name: 'DC-SOC (US-East)', x: width * 0.25, y: height * 0.45 },
+    { name: 'AWS-EU (Frankfurt)', x: width * 0.55, y: height * 0.35 },
+    { name: 'APAC-SG (Singapore)', x: width * 0.8, y: height * 0.6 }
+  ];
+
+  const attackers = [
+    { ip: '185.220.101.4 (RU)', x: width * 0.62, y: height * 0.28, color: '#f43f5e' },
+    { ip: '198.51.100.9 (CN)', x: width * 0.85, y: height * 0.45, color: '#f97316' },
+    { ip: '103.21.244.10 (BR)', x: width * 0.35, y: height * 0.75, color: '#eab308' },
+    { ip: '199.66.91.253 (NL)', x: width * 0.52, y: height * 0.32, color: '#f43f5e' }
+  ];
+
+  let particles = [];
+  function spawnArc() {
+    const attacker = attackers[Math.floor(Math.random() * attackers.length)];
+    const target = targets[Math.floor(Math.random() * targets.length)];
+    particles.push({
+      sx: attacker.x, sy: attacker.y,
+      tx: target.x, ty: target.y,
+      progress: 0,
+      speed: 0.015 + Math.random() * 0.01,
+      color: attacker.color
+    });
+  }
+
+  setInterval(spawnArc, 700);
+
+  function render() {
+    ctx.fillStyle = 'rgba(7, 10, 18, 0.25)';
+    ctx.fillRect(0, 0, width, height);
+
+    targets.forEach(t => {
+      ctx.beginPath();
+      ctx.arc(t.x, t.y, 6, 0, Math.PI * 2);
+      ctx.fillStyle = '#3b82f6';
+      ctx.fill();
+      ctx.font = '10px Plus Jakarta Sans';
+      ctx.fillStyle = '#93c5fd';
+      ctx.fillText(t.name, t.x - 30, t.y + 16);
+    });
+
+    attackers.forEach(a => {
+      ctx.beginPath();
+      ctx.arc(a.x, a.y, 5, 0, Math.PI * 2);
+      ctx.fillStyle = a.color;
+      ctx.fill();
+    });
+
+    for (let i = particles.length - 1; i >= 0; i--) {
+      const p = particles[i];
+      p.progress += p.speed;
+
+      const currX = p.sx + (p.tx - p.sx) * p.progress;
+      const currY = p.sy + (p.ty - p.sy) * p.progress - Math.sin(p.progress * Math.PI) * 40;
+
+      ctx.beginPath();
+      ctx.arc(currX, currY, 3, 0, Math.PI * 2);
+      ctx.fillStyle = p.color;
+      ctx.fill();
+
+      if (p.progress >= 1) particles.splice(i, 1);
+    }
+
+    attackMapAnimId = requestAnimationFrame(render);
+  }
+
+  if (attackMapAnimId) cancelAnimationFrame(attackMapAnimId);
+  render();
 }
 
 async function runIocLookup() {
