@@ -42,7 +42,6 @@ document.addEventListener('DOMContentLoaded', () => {
   initThreatIntelEvents();
   initIngestEvents();
   initBgParticles();
-  initCopilotEvents();
 
   switchView('landing');
   refreshAlertBadge();
