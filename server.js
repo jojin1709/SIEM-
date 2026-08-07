@@ -81,6 +81,14 @@ app.use('/api/savedsearches', requireAuth, savedSearchRoutes);
 
 seedDefaultRules();
 
+if (process.env.VERCEL && (process.env.AUTO_LOAD_SAMPLES !== 'false')) {
+  try {
+    const { loadSampleData } = require('./src/routes/ingest');
+    loadSampleData();
+    console.log('  [init] Sample data loaded for Vercel demo');
+  } catch (e) { console.error('[init] sample load error:', e.message); }
+}
+
 if (process.env.SYSLOG_PORT && !process.env.VERCEL) {
   try { syslog.start(); } catch (e) { console.error('[syslog] failed to start:', e.message); }
 }

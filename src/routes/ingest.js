@@ -124,3 +124,59 @@ router.get('/history', (req, res) => {
 });
 
 module.exports = router;
+
+function loadSampleData() {
+  const fs = require('fs');
+  const path = require('path');
+  const { parseLine } = require('../parsers');
+
+  const SAMPLE_DIR = path.join(__dirname, '..', '..', 'sample-logs');
+  const SAMPLE_FILES = [
+    { file: 'auth-syslog.log', source_type: 'syslog' },
+    { file: 'access-nginx.log', source_type: 'nginx' },
+    { file: 'eve.json', source_type: 'suricata' },
+    { file: 'winevents.json', source_type: 'winevent' }
+  ];
+
+  const insertStmt = db.prepare(`
+    INSERT INTO events (ts, source_type, host, src_ip, dest_ip, user, event_id, severity, message, raw, parsed, ingest_batch)
+    VALUES (@ts, @source_type, @host, @src_ip, @dest_ip, @user, @event_id, @severity, @message, @raw, @parsed, @ingest_batch)
+  `);
+
+  for (const { file, source_type } of SAMPLE_FILES) {
+    const fp = path.join(SAMPLE_DIR, file);
+    if (!fs.existsSync(fp)) continue;
+    const lines = fs.readFileSync(fp, 'utf-8').split(/\r?\n/).filter(l => l.trim());
+    const parsedRows = lines.map(l => parseLine(l, source_type));
+    const maxTs = Math.max(...parsedRows.map(p => p.ts || 0));
+    const delta = Date.now() - maxTs;
+    const batchId = `sample-${file}-${Date.now()}`;
+
+    const rows = parsedRows.map((parsed, i) => ({
+      ts: (parsed.ts || Date.now()) + delta,
+      source_type: parsed.source_type || source_type,
+      host: parsed.host || null,
+      src_ip: parsed.src_ip || null,
+      dest_ip: parsed.dest_ip || null,
+      user: parsed.user || null,
+      event_id: parsed.event_id || null,
+      severity: parsed.severity || 'info',
+      message: parsed.message || lines[i].slice(0, 500),
+      raw: lines[i].slice(0, 2000),
+      parsed: JSON.stringify(parsed.parsed || {}),
+      ingest_batch: batchId
+    }));
+
+    db.exec('BEGIN');
+    try {
+      for (const e of rows) insertStmt.run(e);
+      db.exec('COMMIT');
+    } catch (err) {
+      db.exec('ROLLBACK');
+    }
+    db.prepare(`INSERT INTO ingest_log (filename, source_type, event_count, ingested_at) VALUES (?, ?, ?, ?)`)
+      .run(file, source_type, rows.length, Date.now());
+  }
+}
+
+module.exports.loadSampleData = loadSampleData;
