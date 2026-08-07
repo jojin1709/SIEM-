@@ -7,7 +7,7 @@ if (!API_KEY || API_KEY === '__API_KEY__') {
   API_KEY = 'siem-default-key-12345';
 }
 
-let currentView = 'landing';
+let currentView = 'dashboard';
 let searchPage = 1;
 let timeRangePreset = 'all';
 let alertStatusFilter = '';
