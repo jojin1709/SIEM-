@@ -85,7 +85,7 @@ if (process.env.VERCEL && (process.env.AUTO_LOAD_SAMPLES !== 'false')) {
   try {
     const { loadSampleData } = require('./src/routes/ingest');
     loadSampleData();
-    console.log('  [init] Sample data loaded for Vercel demo');
+    console.log('  [init] Initial threat log scenarios loaded for Vercel');
   } catch (e) { console.error('[init] sample load error:', e.message); }
 }
 
