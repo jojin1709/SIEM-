@@ -8,7 +8,10 @@
         "includeFiles": [
           "src/**",
           "public/**",
-          "sample-logs/**",
+          "sample-logs/auth-syslog.log",
+          "sample-logs/access-nginx.log",
+          "sample-logs/eve.json",
+          "sample-logs/winevents.json",
           "data/threatintel/**"
         ]
       }
