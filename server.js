@@ -38,8 +38,9 @@ app.use(helmet({
 app.use(express.json({ limit: '10mb' }));
 
 app.get('/', (req, res) => {
+  res.setHeader('Set-Cookie', `siem_key=${API_KEY}; Path=/; SameSite=Lax`);
   const html = fs.readFileSync(path.join(__dirname, 'public', 'index.html'), 'utf-8');
-  res.send(html.replace('__API_KEY__', API_KEY));
+  res.send(html.replace(/__API_KEY__/g, API_KEY));
 });
 
 app.use(express.static(path.join(__dirname, 'public')));

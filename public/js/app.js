@@ -7,7 +7,7 @@ if (!API_KEY || API_KEY === '__API_KEY__') {
   API_KEY = 'siem-default-key-12345';
 }
 
-let currentView = 'dashboard';
+let currentView = 'landing';
 let searchPage = 1;
 let timeRangePreset = 'all';
 let alertStatusFilter = '';
@@ -18,8 +18,16 @@ let chartSeverity = null;
 // ---------- API Fetch Helper ----------
 async function apiFetch(url, options = {}) {
   const headers = options.headers || {};
-  headers['X-API-Key'] = API_KEY;
-  return fetch(url, { ...options, headers });
+  if (API_KEY && API_KEY !== '__API_KEY__') {
+    headers['X-API-Key'] = API_KEY;
+  }
+  options.credentials = 'same-origin';
+  const res = await fetch(url, { ...options, headers });
+  if (!res.ok) {
+    const errData = await res.json().catch(() => ({}));
+    throw new Error(errData.error || errData.message || `HTTP ${res.status}`);
+  }
+  return res;
 }
 
 window.apiFetch = apiFetch;
@@ -76,6 +84,7 @@ function switchView(view) {
   if (view === 'threatintel') loadThreatIntel();
   if (view === 'ingest') loadIngestHistory();
 }
+window.switchView = switchView;
 
 // ---------- Alert Count Badge ----------
 async function refreshAlertBadge() {
@@ -849,11 +858,38 @@ function initIngestEvents() {
   const form = document.getElementById('ingestForm');
   const fileInput = document.getElementById('logFileInput');
   const selectedName = document.getElementById('selectedFileName');
+  const dropZone = document.getElementById('dropZone');
+
+  if (dropZone && fileInput) {
+    dropZone.addEventListener('click', (e) => {
+      if (e.target.tagName !== 'INPUT') {
+        fileInput.click();
+      }
+    });
+
+    dropZone.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      dropZone.style.borderColor = 'var(--cyber-cyan)';
+    });
+
+    dropZone.addEventListener('dragleave', () => {
+      dropZone.style.borderColor = 'var(--border-glow)';
+    });
+
+    dropZone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      dropZone.style.borderColor = 'var(--border-glow)';
+      if (e.dataTransfer.files.length > 0) {
+        fileInput.files = e.dataTransfer.files;
+        if (selectedName) selectedName.textContent = `Selected File: ${fileInput.files[0].name} (${(fileInput.files[0].size / 1024).toFixed(1)} KB)`;
+      }
+    });
+  }
 
   if (fileInput) {
     fileInput.addEventListener('change', () => {
       if (fileInput.files.length > 0 && selectedName) {
-        selectedName.textContent = `Selected: ${fileInput.files[0].name}`;
+        selectedName.textContent = `Selected File: ${fileInput.files[0].name} (${(fileInput.files[0].size / 1024).toFixed(1)} KB)`;
       }
     });
   }
@@ -861,32 +897,47 @@ function initIngestEvents() {
   if (form) {
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
-      if (!fileInput.files.length) return alert('Please select a file to ingest');
+      if (!fileInput.files || !fileInput.files.length) {
+        return alert('Please click "Browse Log File" or drop a log file into the box to upload.');
+      }
 
       const formData = new FormData();
       formData.append('file', fileInput.files[0]);
       formData.append('source_type', document.getElementById('sourceTypeSelect').value);
 
+      const submitBtn = form.querySelector('button[type="submit"]');
+      if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Uploading...';
+      }
+
       try {
         const resp = await apiFetch('/api/ingest/file', { method: 'POST', body: formData }).then(r => r.json());
         alert(`Successfully ingested ${resp.ingested} log events!`);
         form.reset();
-        if (selectedName) selectedName.textContent = 'Supports Syslog, Nginx, Suricata, Windows Event';
+        if (selectedName) selectedName.textContent = 'Supports Syslog, Nginx, Suricata, Windows Event XML/JSON';
         refreshAlertBadge();
-      } catch (err) { alert('Ingest failed: ' + err.message); }
+      } catch (err) {
+        alert('Ingest failed: ' + err.message);
+      } finally {
+        if (submitBtn) {
+          submitBtn.disabled = false;
+          submitBtn.textContent = 'Ingest File';
+        }
+      }
     });
   }
 
   document.getElementById('loadSampleDataBtn')?.addEventListener('click', async () => {
     const feedback = document.getElementById('ingestFeedback');
-    if (feedback) feedback.textContent = 'Loading sample log suite...';
+    if (feedback) feedback.textContent = 'Ingesting security threat scenarios...';
 
     try {
       const resp = await apiFetch('/api/ingest/sample', { method: 'POST' }).then(r => r.json());
       if (feedback) feedback.textContent = `✅ Successfully loaded sample logs across all 4 threat sources!`;
       refreshAlertBadge();
     } catch (err) {
-      if (feedback) feedback.textContent = `❌ Failed to load sample data`;
+      if (feedback) feedback.textContent = `❌ Failed to load sample data: ` + err.message;
     }
   });
 }

@@ -5,7 +5,10 @@ if (process.env.NODE_ENV !== 'production') {
 }
 
 function requireAuth(req, res, next) {
-  const key = req.headers['x-api-key'] || req.headers['authorization']?.replace(/^Bearer\s+/i, '');
+  const cookieMatch = req.headers.cookie ? req.headers.cookie.match(/siem_key=([^;]+)/) : null;
+  const cookieKey = cookieMatch ? cookieMatch[1] : null;
+  const key = req.headers['x-api-key'] || req.headers['authorization']?.replace(/^Bearer\s+/i, '') || cookieKey;
+  
   if (!key || key !== API_KEY) {
     return res.status(401).json({ error: 'Unauthorized: valid API key required' });
   }
