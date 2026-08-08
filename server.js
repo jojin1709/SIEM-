@@ -23,6 +23,7 @@ const dashboardRoutes = require('./src/routes/dashboard');
 const alertRoutes = require('./src/routes/alerts');
 const analyticsRoutes = require('./src/routes/analytics');
 const savedSearchRoutes = require('./src/routes/savedsearches');
+const managementRoutes = require('./src/routes/management');
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -86,6 +87,7 @@ app.use('/api/dashboard', requireAuth, dashboardRoutes);
 app.use('/api/alerts', requireAuth, alertRoutes);
 app.use('/api/analytics', requireAuth, analyticsRoutes);
 app.use('/api/savedsearches', requireAuth, savedSearchRoutes);
+app.use('/api/management', requireAuth, managementRoutes);
 
 seedDefaultRules();
 

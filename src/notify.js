@@ -149,11 +149,22 @@ function loadConfig() {
   if (process.env.WEBHOOK_URL) {
     cfg.webhook = {
       url: process.env.WEBHOOK_URL,
-      headers: process.env.WEBHOOK_HEADERS ? JSON.parse(process.env.WEBHOOK_HEADERS) : {},
+      headers: parseHeaders(process.env.WEBHOOK_HEADERS),
       channel: process.env.WEBHOOK_CHANNEL || false
     };
   }
   return cfg;
+}
+
+function parseHeaders(value) {
+  if (!value) return {};
+  try {
+    const parsed = JSON.parse(value);
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+  } catch (e) {
+    console.error('[notify] invalid WEBHOOK_HEADERS JSON, ignoring headers');
+    return {};
+  }
 }
 
 module.exports = { notify, sendEmail, sendWebhook };
