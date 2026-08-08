@@ -569,6 +569,19 @@
             </div>
           </div>
 
+          <div class="panel" style="margin-top: 24px;">
+            <div class="panel-title" style="display:flex; justify-content:space-between; align-items:center;">
+              <span>Ingestion History</span>
+              <button class="btn btn-secondary" id="refreshIngestHistory" style="padding: 4px 10px;">Refresh</button>
+            </div>
+            <div class="table-wrap">
+              <table class="data-table">
+                <thead><tr><th>File</th><th>Source</th><th>Events</th><th>Ingested</th></tr></thead>
+                <tbody id="ingestHistoryBody"><tr><td colspan="4" class="empty-state">No ingestion history yet.</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+
           <!-- Log Forwarder Code Generator Panel -->
           <div class="panel" style="margin-top: 24px;">
             <div class="panel-title">📥 External Log Forwarder Agent Snippets</div>

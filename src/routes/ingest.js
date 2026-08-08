@@ -8,6 +8,12 @@ const { SAMPLE_DATA } = require('../sample-data');
 const { runAllRules } = require('../rules');
 
 const router = express.Router();
+
+router.get('/history', (req, res) => {
+  const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 25));
+  const rows = db.prepare('SELECT id, filename, source_type, event_count, ingested_at FROM ingest_log ORDER BY ingested_at DESC LIMIT ?').all(limit);
+  res.json({ history: rows });
+});
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 50 * 1024 * 1024 } });
 
 const insertStmt = db.prepare(`

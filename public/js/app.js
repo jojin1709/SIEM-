@@ -1102,7 +1102,20 @@ function initIngestEvents() {
   });
 }
 
-function loadIngestHistory() {}
+async function loadIngestHistory() {
+  const body = document.getElementById('ingestHistoryBody');
+  if (!body) return;
+  try {
+    const data = await apiFetch('/api/ingest/history?limit=25');
+    body.innerHTML = data.history.length ? data.history.map(row =>
+      `<tr><td>${escapeHtml(row.filename || '—')}</td><td>${escapeHtml(row.source_type || 'unknown')}</td><td>${Number(row.event_count || 0).toLocaleString()}</td><td>${new Date(row.ingested_at).toLocaleString()}</td></tr>`
+    ).join('') : '<tr><td colspan="4" class="empty-state">No ingestion history yet.</td></tr>';
+  } catch (err) {
+    body.innerHTML = `<tr><td colspan="4" class="empty-state">Unable to load history: ${escapeHtml(err.message)}</td></tr>`;
+  }
+}
+
+document.getElementById('refreshIngestHistory')?.addEventListener('click', loadIngestHistory);
 
 // ---------- API Key Modal ----------
 function initApiKeyModal() {
